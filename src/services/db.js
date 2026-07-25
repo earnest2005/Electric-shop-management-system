@@ -160,9 +160,18 @@ function getLocalStore(key, defaultData) {
   return defaultData;
 }
 
-function setLocalStore(key, data) {
-  localStorage.setItem(`volt_db_${key}`, JSON.stringify(data));
-  window.dispatchEvent(new CustomEvent('volt_db_updated', { detail: { key } }));
+function setLocalStore(key, data, notify = true) {
+  try {
+    const newStr = JSON.stringify(data);
+    const oldStr = localStorage.getItem(`volt_db_${key}`);
+    if (oldStr === newStr) return; // Prevent duplicate writes & loops
+    localStorage.setItem(`volt_db_${key}`, newStr);
+    if (notify) {
+      window.dispatchEvent(new CustomEvent('volt_db_updated', { detail: { key } }));
+    }
+  } catch (e) {
+    console.warn(`Error writing local store ${key}:`, e);
+  }
 }
 
 // Service Functions
@@ -172,7 +181,7 @@ export async function getProducts() {
       const snap = await withTimeout(getDocs(collection(db, 'products')), 2000);
       if (!snap.empty) {
         const cloudProducts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setLocalStore('products', cloudProducts);
+        setLocalStore('products', cloudProducts, false);
         return cloudProducts;
       }
     }
@@ -220,7 +229,7 @@ export async function getCustomers() {
       const snap = await withTimeout(getDocs(collection(db, 'customers')), 2000);
       if (!snap.empty) {
         const cloudCusts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setLocalStore('customers', cloudCusts);
+        setLocalStore('customers', cloudCusts, false);
         return cloudCusts;
       }
     }
@@ -378,7 +387,7 @@ export async function getPurchases() {
       const snap = await withTimeout(getDocs(collection(db, 'purchases')), 2000);
       if (!snap.empty) {
         const cloudPurchases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setLocalStore('purchases', cloudPurchases);
+        setLocalStore('purchases', cloudPurchases, false);
         return cloudPurchases;
       }
     }
@@ -475,7 +484,7 @@ export async function getShopDetails() {
       const snap = await withTimeout(getDoc(docRef), 2000);
       if (snap.exists()) {
         const data = snap.data();
-        setLocalStore('shop_details', data);
+        setLocalStore('shop_details', data, false);
         return data;
       }
     }
