@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { X, Save, Database, ShieldCheck, Info, UploadCloud, CheckCircle2 } from 'lucide-react';
 import { getStoredFirebaseConfig, saveStoredFirebaseConfig, isRealFirebase } from '../firebase/config';
 import { seedLiveFirebase } from '../services/db';
+import { useAlert } from '../context/AlertContext';
 
 export default function FirebaseConfigModal({ onClose }) {
+  const { toast } = useAlert();
   const [config, setConfig] = useState(getStoredFirebaseConfig());
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedSuccess, setSeedSuccess] = useState(false);
@@ -11,6 +13,7 @@ export default function FirebaseConfigModal({ onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     saveStoredFirebaseConfig(config);
+    toast.success("Firebase configuration saved successfully!", "Config Saved");
     onClose();
   };
 
@@ -19,9 +22,10 @@ export default function FirebaseConfigModal({ onClose }) {
     try {
       await seedLiveFirebase();
       setSeedSuccess(true);
+      toast.success("Catalog & Customer Dues uploaded to Cloud Firestore successfully!", "Seed Complete");
       setTimeout(() => setSeedSuccess(false), 4000);
     } catch (err) {
-      alert("Error seeding Cloud Firestore: " + err.message);
+      toast.error("Error seeding Cloud Firestore: " + err.message, "Seed Failed");
     } finally {
       setIsSeeding(false);
     }

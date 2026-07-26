@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Package, Plus, Search, Edit3, Barcode, AlertTriangle, CheckCircle, Tag, RefreshCw, X, Save, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Package, Plus, Search, Edit3, Barcode, AlertTriangle, CheckCircle, Tag, RefreshCw, X, Save, Loader2, Download, Upload } from 'lucide-react';
 import { formatRupees, rupeesToPaise, paiseToRupees } from '../utils/currency';
 import { getProducts, saveProduct } from '../services/db';
+import { useAlert } from '../context/AlertContext';
+import { exportInventoryCSV } from '../utils/exporter';
 
 export default function InventoryMaster() {
+  const { toast } = useAlert();
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Edit/Create Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -32,6 +36,60 @@ export default function InventoryMaster() {
     window.addEventListener('volt_db_updated', loadProducts);
     return () => window.removeEventListener('volt_db_updated', loadProducts);
   }, []);
+
+  const handleCSVExport = () => {
+    if (products.length === 0) {
+      toast.warning("No products available to export.", "Empty Catalog");
+      return;
+    }
+    exportInventoryCSV(products);
+    toast.success("Exported inventory catalog CSV!", "Export Downloaded");
+  };
+
+  const handleCSVImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target.result;
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length <= 1) return;
+
+        let addedCount = 0;
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim());
+          if (cols.length >= 2) {
+            const barcode = cols[0] || `890${Math.floor(100000000 + Math.random() * 900000000)}`;
+            const productName = cols[1];
+            const brand = cols[2] || 'General';
+            const category = cols[3] || 'Wires & Cables';
+            const price = parseFloat(cols[4]) || 100;
+            const stock = parseInt(cols[5], 10) || 50;
+
+            await saveProduct({
+              barcode,
+              productName,
+              brand,
+              category,
+              basePrice: rupeesToPaise(price.toString()),
+              currentStock: stock,
+              minStockAlert: 10,
+              taxPercent: 18
+            });
+            addedCount++;
+          }
+        }
+        toast.success(`Successfully imported ${addedCount} items from CSV!`, "Import Successful");
+        loadProducts();
+      } catch (err) {
+        toast.error("Failed to parse CSV file", "Import Error");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Filter products
   const categories = ['All', 'Wires & Cables', 'Switches & Sockets', 'Switchgear & MCBs', 'Fans & Appliances', 'Lighting', 'Conduits & Fittings', 'Tools & Accessories'];
@@ -77,7 +135,7 @@ export default function InventoryMaster() {
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     if (!formBarcode.trim() || !formName.trim() || !formPriceRupees) {
-      alert("Please fill in Barcode ID, Product Name, and Base Price.");
+      toast.error("Please fill in Barcode ID, Product Name, and Base Price.", "Validation Error");
       return;
     }
 
@@ -97,11 +155,12 @@ export default function InventoryMaster() {
         taxPercent: 18
       });
 
+      toast.success(`Product ${formName.trim()} saved to inventory!`, "Item Saved");
       setModalOpen(false);
       await loadProducts();
     } catch (err) {
       console.error("Failed to save product:", err);
-      alert("Error saving item: " + err.message);
+      toast.error("Error saving item: " + err.message, "Save Failed");
     } finally {
       setIsSubmitting(false);
     }
@@ -122,13 +181,38 @@ export default function InventoryMaster() {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="flex items-center space-x-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl shadow-lg transition self-start md:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add New Electrical Item</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleCSVImport}
+            accept=".csv"
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs rounded-xl transition"
+            title="Import Products from CSV"
+          >
+            <Upload className="w-3.5 h-3.5 text-amber-400" />
+            <span>Import CSV</span>
+          </button>
+          <button
+            onClick={handleCSVExport}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs rounded-xl transition"
+            title="Export Products Catalog to CSV"
+          >
+            <Download className="w-3.5 h-3.5 text-amber-400" />
+            <span>Export CSV</span>
+          </button>
+          <button
+            onClick={handleOpenAdd}
+            className="flex items-center space-x-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl shadow-lg transition"
+          >
+            <Plus className="w-4 h-4 text-black" />
+            <span>Add Item</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}

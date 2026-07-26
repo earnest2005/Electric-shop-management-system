@@ -4,21 +4,11 @@ import {
   getDocs, 
   getDoc, 
   setDoc, 
-  deleteDoc,
-  writeBatch 
+  deleteDoc 
 } from 'firebase/firestore';
-import { db, isRealFirebase } from '../firebase/config';
+import { db } from '../firebase/config';
 
-// Helper: Timeout wrapper for Firestore operations to prevent UI buffering
-function withTimeout(promise, ms = 2500) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error('Firestore operation timed out')), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-// Seed Mock Data in Paise (1 Rupee = 100 Paise)
+// Fallback seed data in case Firestore is completely empty on first launch
 export const SEED_PRODUCTS = [
   {
     id: "890123400001",
@@ -142,53 +132,67 @@ export const SEED_PRODUCTS = [
   }
 ];
 
+export const DEFAULT_SHOP_DETAILS = {
+  shopName: "VOLT ELECTRICALS",
+  tagline: "Power, Lighting & Hardware Master Store",
+  ownerName: "Rajesh Kumar",
+  phone: "+91 98765 00000",
+  address: "Main Market Road, Near Electric Substation, Sector 4",
+  gstin: "29ABCDE1234F1Z5",
+  invoiceFooterNote: "Thank you for shopping at Volt Electricals! Warranty valid against invoice.",
+  defaultTaxPercent: 18,
+  appPassword: "admin123"
+};
+
 export const SEED_CUSTOMERS = [];
-
 export const SEED_PURCHASES = [];
-
 export const SEED_PAYMENTS = [];
 
-// LocalStorage Persistence Helpers
-function getLocalStore(key, defaultData) {
+// Local cache helper for instant 0ms UI rendering
+function getLocalCache(key, fallback = []) {
   try {
-    const data = localStorage.getItem(`volt_db_${key}`);
-    if (data) return JSON.parse(data);
-  } catch (e) {
-    console.warn(`Error reading local store ${key}:`, e);
-  }
-  localStorage.setItem(`volt_db_${key}`, JSON.stringify(defaultData));
-  return defaultData;
+    const raw = localStorage.getItem(`volt_db_${key}`);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return fallback;
 }
 
-function setLocalStore(key, data, notify = true) {
+function setLocalCache(key, data, emitEvent = true) {
   try {
-    const newStr = JSON.stringify(data);
-    const oldStr = localStorage.getItem(`volt_db_${key}`);
-    if (oldStr === newStr) return; // Prevent duplicate writes & loops
-    localStorage.setItem(`volt_db_${key}`, newStr);
-    if (notify) {
+    const jsonStr = JSON.stringify(data);
+    const existingStr = localStorage.getItem(`volt_db_${key}`);
+    if (existingStr === jsonStr) {
+      // Data unchanged; skip event to prevent infinite re-fetch loop
+      return;
+    }
+    localStorage.setItem(`volt_db_${key}`, jsonStr);
+    if (emitEvent) {
       window.dispatchEvent(new CustomEvent('volt_db_updated', { detail: { key } }));
     }
-  } catch (e) {
-    console.warn(`Error writing local store ${key}:`, e);
-  }
+  } catch (e) {}
 }
 
-// Service Functions
+// ------------------------------------------------------------------
+// PRODUCTS
+// ------------------------------------------------------------------
 export async function getProducts() {
-  try {
-    if (db && isRealFirebase) {
-      const snap = await withTimeout(getDocs(collection(db, 'products')), 2000);
+  const cached = getLocalCache('products', SEED_PRODUCTS);
+
+  // Non-blocking background sync with Firestore (Zero Tab Buffering)
+  getDocs(collection(db, 'products'))
+    .then(snap => {
       if (!snap.empty) {
-        const cloudProducts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setLocalStore('products', cloudProducts, false);
-        return cloudProducts;
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setLocalCache('products', items);
+      } else {
+        SEED_PRODUCTS.forEach(prod => {
+          setDoc(doc(db, 'products', prod.barcode), prod, { merge: true }).catch(() => {});
+        });
       }
-    }
-  } catch (err) {
-    console.warn("Firestore fetch products warning, using local store:", err.message);
-  }
-  return getLocalStore('products', SEED_PRODUCTS);
+    })
+    .catch(e => console.warn("Background Firestore products sync:", e.message));
+
+  return cached;
 }
 
 export async function saveProduct(product) {
@@ -203,203 +207,192 @@ export async function saveProduct(product) {
     updatedAt: new Date().toISOString()
   };
 
-  // 1. Instant local store update for 0ms delay UI reaction
-  const products = getLocalStore('products', SEED_PRODUCTS);
+  // Instant local cache update (0ms UI latency)
+  const products = getLocalCache('products', SEED_PRODUCTS);
   const idx = products.findIndex(p => p.barcode === product.barcode || p.id === product.id);
-  if (idx >= 0) {
-    products[idx] = { ...products[idx], ...productData };
-  } else {
-    products.unshift(productData);
-  }
-  setLocalStore('products', products);
+  if (idx >= 0) products[idx] = { ...products[idx], ...productData };
+  else products.unshift(productData);
+  setLocalCache('products', products);
 
-  // 2. Non-blocking Cloud Firestore background write
-  if (db && isRealFirebase) {
-    withTimeout(setDoc(doc(db, 'products', product.barcode), productData, { merge: true }), 2500)
-      .then(() => console.log("Cloud Firestore product saved:", product.barcode))
-      .catch(err => console.warn("Firestore saveProduct warning:", err.message));
-  }
+  // Live Non-Blocking Firebase Write
+  setDoc(doc(db, 'products', product.barcode), productData, { merge: true })
+    .then(() => console.log("🔥 Direct Firestore product saved:", product.barcode))
+    .catch(e => console.error("❌ Firestore saveProduct error:", e));
 
   return productData;
 }
 
+// ------------------------------------------------------------------
+// CUSTOMERS
+// ------------------------------------------------------------------
 export async function getCustomers() {
-  try {
-    if (db && isRealFirebase) {
-      const snap = await withTimeout(getDocs(collection(db, 'customers')), 2000);
+  const cached = getLocalCache('customers', []);
+
+  // Non-blocking background sync with Firestore (Zero Tab Buffering)
+  getDocs(collection(db, 'customers'))
+    .then(snap => {
       if (!snap.empty) {
-        const cloudCusts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setLocalStore('customers', cloudCusts, false);
-        return cloudCusts;
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setLocalCache('customers', items);
       }
-    }
-  } catch (err) {
-    console.warn("Firestore getCustomers warning:", err.message);
-  }
-  return getLocalStore('customers', SEED_CUSTOMERS);
+    })
+    .catch(e => console.warn("Background Firestore customers sync:", e.message));
+
+  return cached;
 }
 
 export async function searchCustomerByPhone(phone) {
   const cleanPhone = phone.replace(/\D/g, '');
   if (!cleanPhone) return null;
-  
   const customers = await getCustomers();
   return customers.find(c => c.phone.replace(/\D/g, '') === cleanPhone) || null;
 }
 
-export async function saveCustomer(customerData) {
-  const cleanPhone = customerData.phone.replace(/\D/g, '');
-  const updatedDoc = {
+export async function saveCustomer(cust) {
+  const cleanPhone = cust.phone.replace(/\D/g, '') || `CUST-${Date.now()}`;
+  const custData = {
+    ...cust,
     id: cleanPhone,
     phone: cleanPhone,
-    name: customerData.name,
-    address: customerData.address || 'Local Customer',
-    totalPurchases: customerData.totalPurchases || 0,
-    totalDue: customerData.totalDue || 0,
-    lastPurchaseAt: customerData.lastPurchaseAt || new Date().toISOString()
+    name: cust.name || 'Customer',
+    address: cust.address || 'Local Store',
+    totalPurchases: Number(cust.totalPurchases || 0),
+    totalDue: Number(cust.totalDue || 0),
+    lastPurchaseAt: cust.lastPurchaseAt || new Date().toISOString()
   };
 
-  const customers = getLocalStore('customers', SEED_CUSTOMERS);
-  const idx = customers.findIndex(c => c.phone === cleanPhone);
-  if (idx >= 0) {
-    customers[idx] = { ...customers[idx], ...updatedDoc };
-  } else {
-    customers.push(updatedDoc);
-  }
-  setLocalStore('customers', customers);
+  // Instant local cache update (0ms UI latency)
+  const customers = getLocalCache('customers', []);
+  const idx = customers.findIndex(c => c.phone.replace(/\D/g, '') === cleanPhone);
+  if (idx >= 0) customers[idx] = { ...customers[idx], ...custData };
+  else customers.unshift(custData);
+  setLocalCache('customers', customers);
 
-  if (db && isRealFirebase) {
-    withTimeout(setDoc(doc(db, 'customers', cleanPhone), updatedDoc, { merge: true }), 2500)
-      .catch(e => console.warn("Firestore saveCustomer warning:", e.message));
-  }
+  // Live Non-Blocking Firebase Write
+  setDoc(doc(db, 'customers', cleanPhone), custData, { merge: true })
+    .then(() => console.log("🔥 Direct Firestore customer saved:", cleanPhone))
+    .catch(e => console.error("❌ Firestore saveCustomer error:", e));
 
-  return updatedDoc;
+  return custData;
 }
 
-/**
- * Executes Instant Local & Background Firestore Atomic Transaction for POS Billing
- */
-export async function processSaleBatch(sale) {
+// ------------------------------------------------------------------
+// INVOICE / SALES BILLING
+// ------------------------------------------------------------------
+export async function createInvoice(sale) {
+  const rawPhone = (sale.customer && sale.customer.phone) ? sale.customer.phone.replace(/\D/g, '') : '';
+  const cleanPhone = rawPhone || `CUST-${Date.now()}`;
   const timestamp = new Date().toISOString();
-  const billNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-  const cleanPhone = sale.customer.phone.replace(/\D/g, '');
+  const billNumber = `INV-${Date.now().toString().slice(-6)}`;
 
   const purchaseRecord = {
     id: billNumber,
     billNumber,
-    customerId: cleanPhone,
-    customerPhone: cleanPhone,
-    customerName: sale.customer.name,
-    subtotal: sale.subtotal,
-    tax: sale.tax,
-    discounts: sale.discounts,
-    totalAmount: sale.totalAmount,
-    paidAmount: sale.paidAmount,
-    dueAmount: sale.dueAmount,
-    paymentMethod: sale.paymentMethod,
-    status: sale.dueAmount > 0 ? (sale.paidAmount > 0 ? 'Partial' : 'Credit/Due') : 'Completed',
-    timestamp,
-    items: sale.items.map(item => ({
-      barcode: item.barcode,
-      productName: item.productName,
-      qty: item.qty,
-      basePrice: item.basePrice,
-      total: item.total
-    }))
+    customer: {
+      phone: cleanPhone,
+      name: (sale.customer && sale.customer.name) ? sale.customer.name : 'Walk-in Customer',
+      address: (sale.customer && sale.customer.address) ? sale.customer.address : 'Local Store'
+    },
+    items: (sale.items || []).map(item => ({
+      barcode: item.barcode || 'UNKNOWN',
+      productName: item.productName || 'Product',
+      qty: Number(item.qty || 1),
+      unitPrice: Number(item.unitPrice || 0),
+      total: Number((item.unitPrice || 0) * (item.qty || 1)),
+      taxPercent: Number(item.taxPercent || 18)
+    })),
+    subtotal: Number(sale.subtotal || 0),
+    taxAmount: Number(sale.taxAmount ?? sale.tax ?? 0),
+    discountAmount: Number(sale.discountAmount ?? sale.discounts ?? 0),
+    totalAmount: Number(sale.totalAmount || 0),
+    paidAmount: Number(sale.paidAmount || 0),
+    dueAmount: Number(sale.dueAmount || 0),
+    paymentMethod: sale.paymentMethod || 'CASH',
+    timestamp
   };
 
-  // 1. Instant local store update for 0ms latency UI response
-  const purchases = getLocalStore('purchases', SEED_PURCHASES);
+  // 1. Instant local cache update (0ms UI response)
+  const purchases = getLocalCache('purchases', []);
   purchases.unshift(purchaseRecord);
-  setLocalStore('purchases', purchases);
+  setLocalCache('purchases', purchases);
 
-  const products = getLocalStore('products', SEED_PRODUCTS);
-  sale.items.forEach(item => {
+  const products = getLocalCache('products', SEED_PRODUCTS);
+  (sale.items || []).forEach(item => {
     const pIdx = products.findIndex(p => p.barcode === item.barcode);
-    if (pIdx >= 0) {
-      products[pIdx].currentStock = Math.max(0, products[pIdx].currentStock - item.qty);
-    }
+    if (pIdx >= 0) products[pIdx].currentStock = Math.max(0, products[pIdx].currentStock - item.qty);
   });
-  setLocalStore('products', products);
+  setLocalCache('products', products);
 
-  const customers = getLocalStore('customers', SEED_CUSTOMERS);
+  const customers = getLocalCache('customers', []);
   const cIdx = customers.findIndex(c => c.phone === cleanPhone);
   if (cIdx >= 0) {
-    customers[cIdx].totalPurchases = (customers[cIdx].totalPurchases || 0) + sale.totalAmount;
-    customers[cIdx].totalDue = (customers[cIdx].totalDue || 0) + sale.dueAmount;
+    customers[cIdx].totalPurchases = (customers[cIdx].totalPurchases || 0) + purchaseRecord.totalAmount;
+    customers[cIdx].totalDue = (customers[cIdx].totalDue || 0) + purchaseRecord.dueAmount;
     customers[cIdx].lastPurchaseAt = timestamp;
-    customers[cIdx].name = sale.customer.name;
-    if (sale.customer.address) customers[cIdx].address = sale.customer.address;
+    customers[cIdx].name = purchaseRecord.customer.name;
+    if (purchaseRecord.customer.address) customers[cIdx].address = purchaseRecord.customer.address;
   } else {
     customers.push({
       id: cleanPhone,
       phone: cleanPhone,
-      name: sale.customer.name,
-      address: sale.customer.address || 'Local Customer',
-      totalPurchases: sale.totalAmount,
-      totalDue: sale.dueAmount,
+      name: purchaseRecord.customer.name,
+      address: purchaseRecord.customer.address,
+      totalPurchases: purchaseRecord.totalAmount,
+      totalDue: purchaseRecord.dueAmount,
       lastPurchaseAt: timestamp
     });
   }
-  setLocalStore('customers', customers);
+  setLocalCache('customers', customers);
 
-  // 2. Non-blocking Cloud Firestore background write
-  if (db && isRealFirebase) {
-    const batchSync = async () => {
-      const batch = writeBatch(db);
-      
-      const purchaseRef = doc(collection(db, 'purchases'), billNumber);
-      batch.set(purchaseRef, purchaseRecord);
+  // 2. Non-blocking Background Writes to Cloud Firestore
+  setDoc(doc(db, 'purchases', billNumber), purchaseRecord)
+    .then(() => console.log("🔥 Live Firestore purchase saved:", billNumber))
+    .catch(err => console.error("❌ Firestore purchase save error:", err));
+  
+  setDoc(doc(db, 'customers', cleanPhone), {
+    id: cleanPhone,
+    phone: cleanPhone,
+    name: purchaseRecord.customer.name,
+    address: purchaseRecord.customer.address,
+    totalPurchases: (sale.customer?.totalPurchases || 0) + purchaseRecord.totalAmount,
+    totalDue: (sale.customer?.totalDue || 0) + purchaseRecord.dueAmount,
+    lastPurchaseAt: timestamp
+  }, { merge: true })
+    .then(() => console.log("🔥 Live Firestore customer updated:", cleanPhone))
+    .catch(err => console.error("❌ Firestore customer save error:", err));
 
-      sale.items.forEach(item => {
-        const prodRef = doc(db, 'products', item.barcode);
-        batch.update(prodRef, {
-          currentStock: Math.max(0, item.currentStock - item.qty)
-        });
-      });
-
-      const customerRef = doc(db, 'customers', cleanPhone);
-      batch.set(customerRef, {
-        id: cleanPhone,
-        phone: cleanPhone,
-        name: sale.customer.name,
-        address: sale.customer.address || 'Local Customer',
-        totalPurchases: (sale.customer.totalPurchases || 0) + sale.totalAmount,
-        totalDue: (sale.customer.totalDue || 0) + sale.dueAmount,
-        lastPurchaseAt: timestamp
-      }, { merge: true });
-
-      await batch.commit();
-      console.log("Firestore Batched Write Committed Successfully!");
-    };
-
-    withTimeout(batchSync(), 3000)
-      .catch(err => console.warn("Firestore sale sync warning:", err.message));
+  for (const item of (sale.items || [])) {
+    if (item.barcode) {
+      setDoc(doc(db, 'products', item.barcode), {
+        currentStock: Math.max(0, (item.currentStock || 0) - item.qty)
+      }, { merge: true }).catch(() => {});
+    }
   }
 
   return purchaseRecord;
 }
 
+export const processSaleBatch = createInvoice;
+
 export async function getPurchases() {
-  try {
-    if (db && isRealFirebase) {
-      const snap = await withTimeout(getDocs(collection(db, 'purchases')), 2000);
+  const cached = getLocalCache('purchases', []);
+
+  // Non-blocking background sync with Firestore (Zero Tab Buffering)
+  getDocs(collection(db, 'purchases'))
+    .then(snap => {
       if (!snap.empty) {
-        const cloudPurchases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setLocalStore('purchases', cloudPurchases, false);
-        return cloudPurchases;
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setLocalCache('purchases', items);
       }
-    }
-  } catch (e) {
-    console.warn("Firestore getPurchases warning:", e.message);
-  }
-  return getLocalStore('purchases', SEED_PURCHASES);
+    })
+    .catch(e => console.warn("Background Firestore purchases sync:", e.message));
+
+  return cached;
 }
 
-/**
- * Records Due Repayment by a Customer
- */
+// ------------------------------------------------------------------
+// DUE REPAYMENTS
+// ------------------------------------------------------------------
 export async function recordDuePayment(payment) {
   const timestamp = new Date().toISOString();
   const paymentId = `PAY-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -408,191 +401,126 @@ export async function recordDuePayment(payment) {
     id: paymentId,
     customerPhone: payment.customerPhone,
     customerName: payment.customerName,
-    amountPaid: payment.amountPaid, // In Paise
+    amountPaid: payment.amountPaid,
     paymentMethod: payment.paymentMethod,
     referenceNo: payment.referenceNo || 'CASH',
     notes: payment.notes || 'Due Balance Payment',
     timestamp
   };
 
-  const payments = getLocalStore('payments', SEED_PAYMENTS);
+  const payments = getLocalCache('payments', []);
   payments.unshift(paymentRecord);
-  setLocalStore('payments', payments);
+  setLocalCache('payments', payments);
 
-  const customers = getLocalStore('customers', SEED_CUSTOMERS);
+  const customers = getLocalCache('customers', []);
   const cIdx = customers.findIndex(c => c.phone === payment.customerPhone);
   if (cIdx >= 0) {
     customers[cIdx].totalDue = Math.max(0, (customers[cIdx].totalDue || 0) - payment.amountPaid);
-    setLocalStore('customers', customers);
+    setLocalCache('customers', customers);
   }
 
-  if (db && isRealFirebase) {
-    const payAsync = async () => {
-      const batch = writeBatch(db);
-      const payRef = doc(collection(db, 'customer_payments'), paymentId);
-      batch.set(payRef, paymentRecord);
-
-      const custRef = doc(db, 'customers', payment.customerPhone);
-      const custDoc = await getDoc(custRef);
-      if (custDoc.exists()) {
-        const currentDue = custDoc.data().totalDue || 0;
-        batch.update(custRef, {
-          totalDue: Math.max(0, currentDue - payment.amountPaid)
-        });
-      }
-      await batch.commit();
-    };
-
-    withTimeout(payAsync(), 3000)
-      .catch(err => console.warn("Firestore recordDuePayment warning:", err.message));
-  }
+  setDoc(doc(db, 'customer_payments', paymentId), paymentRecord)
+    .then(() => console.log("🔥 Direct Firestore payment recorded:", paymentId))
+    .catch(e => console.error("❌ Firestore payment record error:", e));
 
   return paymentRecord;
 }
 
 export async function getCustomerPayments(customerPhone) {
-  try {
-    if (db && isRealFirebase) {
-      const snap = await withTimeout(getDocs(collection(db, 'customer_payments')), 2000);
-      const payments = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (!customerPhone) return payments;
-      return payments.filter(p => p.customerPhone === customerPhone);
-    }
-  } catch (err) {
-    console.warn("Firestore getCustomerPayments warning:", err.message);
-  }
-  const payments = getLocalStore('payments', SEED_PAYMENTS);
-  if (!customerPhone) return payments;
-  return payments.filter(p => p.customerPhone === customerPhone);
+  const local = getLocalCache('payments', []);
+
+  getDocs(collection(db, 'customer_payments'))
+    .then(snap => {
+      if (!snap.empty) {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setLocalCache('payments', items);
+      }
+    })
+    .catch(e => console.warn("Background Firestore payments sync:", e.message));
+
+  if (!customerPhone) return local;
+  return local.filter(p => p.customerPhone === customerPhone);
 }
 
-export const DEFAULT_SHOP_DETAILS = {
-  shopName: "VOLT ELECTRICALS",
-  tagline: "Power, Lighting & Hardware Master Store",
-  ownerName: "Rajesh Kumar",
-  phone: "+91 98765 00000",
-  address: "Main Market Road, Near Electric Substation, Sector 4",
-  gstin: "29ABCDE1234F1Z5",
-  invoiceFooterNote: "Thank you for shopping at Volt Electricals! Warranty valid against invoice.",
-  defaultTaxPercent: 18
-};
-
+// ------------------------------------------------------------------
+// SHOP SETTINGS & PASSWORD
+// ------------------------------------------------------------------
 export async function getShopDetails() {
-  try {
-    if (db && isRealFirebase) {
-      const docRef = doc(db, 'settings', 'shop_info');
-      const snap = await withTimeout(getDoc(docRef), 2000);
+  const cached = getLocalCache('shop_details', DEFAULT_SHOP_DETAILS);
+
+  getDoc(doc(db, 'settings', 'shop_info'))
+    .then(snap => {
       if (snap.exists()) {
-        const data = snap.data();
-        setLocalStore('shop_details', data, false);
-        return data;
+        const cloudDetails = snap.data();
+        const merged = { ...DEFAULT_SHOP_DETAILS, ...cloudDetails };
+        setLocalCache('shop_details', merged);
       }
-    }
-  } catch (err) {
-    console.warn("Firestore getShopDetails warning:", err.message);
-  }
-  return getLocalStore('shop_details', DEFAULT_SHOP_DETAILS);
+    })
+    .catch(e => console.warn("Background Firestore shop details sync:", e.message));
+
+  return cached;
 }
 
 export async function saveShopDetails(details) {
-  setLocalStore('shop_details', details);
+  setLocalCache('shop_details', details);
   window.dispatchEvent(new CustomEvent('volt_shop_updated', { detail: details }));
 
-  if (db && isRealFirebase) {
-    const docRef = doc(db, 'settings', 'shop_info');
-    withTimeout(setDoc(docRef, details, { merge: true }), 2500)
-      .catch(e => console.warn("Firestore saveShopDetails warning:", e.message));
-  }
+  const docRef = doc(db, 'settings', 'shop_info');
+  setDoc(docRef, details, { merge: true })
+    .then(() => console.log("🔥 Direct Firestore shop details & password saved:", details))
+    .catch(e => console.error("❌ Firestore saveShopDetails error:", e));
+
   return details;
 }
 
+// ------------------------------------------------------------------
+// DELETE & DATA RESET
+// ------------------------------------------------------------------
 export async function deleteCustomer(phone) {
   const cleanPhone = phone.replace(/\D/g, '');
-  // 1. Remove from local store
-  const customers = getLocalStore('customers', []);
+  const customers = getLocalCache('customers', []);
   const updated = customers.filter(c => c.phone.replace(/\D/g, '') !== cleanPhone);
-  setLocalStore('customers', updated);
+  setLocalCache('customers', updated);
 
-  // 2. Delete from Cloud Firestore
-  if (db && isRealFirebase) {
-    try {
-      await withTimeout(deleteDoc(doc(db, 'customers', cleanPhone)), 3000);
-      console.log("Deleted customer from Cloud Firestore:", cleanPhone);
-    } catch (err) {
-      console.warn("Firestore deleteCustomer warning:", err.message);
-    }
-  }
+  deleteDoc(doc(db, 'customers', cleanPhone))
+    .then(() => console.log("🔥 Direct Firestore customer deleted:", cleanPhone))
+    .catch(err => console.error("❌ Firestore deleteCustomer error:", err));
 
-  window.dispatchEvent(new CustomEvent('volt_db_updated', { detail: { key: 'customers' } }));
   return true;
 }
 
 export async function deleteInvoice(billNumber) {
-  // 1. Remove from local store
-  const purchases = getLocalStore('purchases', []);
-  const updated = purchases.filter(p => p.billNumber !== billNumber && p.id !== billNumber);
-  setLocalStore('purchases', updated);
+  const purchases = getLocalCache('purchases', []);
+  const updated = purchases.filter(p => (p.billNumber || p.id) !== billNumber);
+  setLocalCache('purchases', updated);
 
-  // 2. Delete from Cloud Firestore
-  if (db && isRealFirebase) {
-    try {
-      await withTimeout(deleteDoc(doc(db, 'purchases', billNumber)), 3000);
-      console.log("Deleted invoice from Cloud Firestore:", billNumber);
-    } catch (err) {
-      console.warn("Firestore deleteInvoice warning:", err.message);
-    }
-  }
+  deleteDoc(doc(db, 'purchases', billNumber))
+    .then(() => console.log("🔥 Direct Firestore invoice deleted:", billNumber))
+    .catch(err => console.error("❌ Firestore deleteInvoice error:", err));
 
-  window.dispatchEvent(new CustomEvent('volt_db_updated', { detail: { key: 'purchases' } }));
   return true;
 }
 
 export async function clearBillsAndCustomers() {
-  // 1. Clear Local Storage
   localStorage.setItem('volt_db_purchases', JSON.stringify([]));
   localStorage.setItem('volt_db_customers', JSON.stringify([]));
   localStorage.setItem('volt_db_payments', JSON.stringify([]));
 
-  // 2. Clear Cloud Firestore collections if connected
-  if (db && isRealFirebase) {
-    try {
-      const collectionsToClear = ['purchases', 'customers', 'customer_payments'];
-      for (const colName of collectionsToClear) {
-        const snap = await withTimeout(getDocs(collection(db, colName)), 4000);
-        if (!snap.empty) {
-          // Delete every document in Firestore
-          const deletePromises = snap.docs.map(docSnap => deleteDoc(docSnap.ref));
-          await Promise.all(deletePromises);
+  try {
+    const collectionsToClear = ['purchases', 'customers', 'customer_payments'];
+    for (const colName of collectionsToClear) {
+      const snap = await getDocs(collection(db, colName));
+      if (!snap.empty) {
+        for (const docSnap of snap.docs) {
+          await deleteDoc(docSnap.ref);
         }
       }
-      console.log("Cloud Firestore bills, customer, and payment collections wiped clean!");
-    } catch (err) {
-      console.warn("Firestore wipe warning:", err.message);
     }
+    console.log("🔥 Direct Firestore records cleared!");
+  } catch (err) {
+    console.error("❌ Firestore clear error:", err);
   }
 
-  // 3. Dispatch global update event
   window.dispatchEvent(new CustomEvent('volt_db_updated', { detail: { key: 'all' } }));
   return true;
-}
-
-export async function seedLiveFirebase() {
-  if (!db) throw new Error("Firestore instance not initialized");
-
-  const batch = writeBatch(db);
-  SEED_PRODUCTS.forEach(prod => {
-    const prodRef = doc(db, 'products', prod.barcode);
-    batch.set(prodRef, prod, { merge: true });
-  });
-
-  SEED_CUSTOMERS.forEach(cust => {
-    const custRef = doc(db, 'customers', cust.phone);
-    batch.set(custRef, cust, { merge: true });
-  });
-
-  const shopRef = doc(db, 'settings', 'shop_info');
-  batch.set(shopRef, DEFAULT_SHOP_DETAILS, { merge: true });
-
-  await batch.commit();
-  console.log("Seeded Live Firebase Cloud Firestore successfully!");
 }

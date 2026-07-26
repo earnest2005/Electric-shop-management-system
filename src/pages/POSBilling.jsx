@@ -2,13 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Barcode, Search, ShoppingCart, Plus, Minus, Trash2, User, Phone, 
   CreditCard, DollarSign, QrCode, AlertTriangle, CheckCircle2, Zap, 
-  Tag, ChevronRight, FileText, ArrowRight 
+  Tag, ChevronRight, FileText, ArrowRight, PauseCircle, RotateCcw, Clock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { formatRupees, rupeesToPaise, paiseToRupees, formatNumberIN } from '../utils/currency';
-import { getProducts, searchCustomerByPhone, processSaleBatch, getPurchases } from '../services/db';
+import { getProducts, searchCustomerByPhone, processSaleBatch, getPurchases, getCustomers } from '../services/db';
+import { useAlert } from '../context/AlertContext';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
-export default function POSBilling({ onCompleteSale }) {
+export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
+  const { toast } = useAlert();
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -17,30 +20,68 @@ export default function POSBilling({ onCompleteSale }) {
   // Cart state
   const [cart, setCart] = useState([]);
   const [discountRupees, setDiscountRupees] = useState('');
+  const [lastRemovedItem, setLastRemovedItem] = useState(null);
 
   // Customer state
+  const [allCustomers, setAllCustomers] = useState([]);
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [existingCustomer, setExistingCustomer] = useState(null);
-  const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState('UPI'); // Cash, UPI, Card, Credit/Due, Split
   const [paidRupees, setPaidRupees] = useState(''); // Amount paid by customer in Rupees string
+  const [cashTenderedRupees, setCashTenderedRupees] = useState(''); // Cash given by customer
 
   // Processing state
   const [recentPurchases, setRecentPurchases] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const barcodeInputRef = useRef(null);
+  const customerPhoneRef = useRef(null);
 
-  // Load products and recent sales
+  // If a draft bill was requested to resume from parent App
+  useEffect(() => {
+    if (onResumeDraftData) {
+      setCart(onResumeDraftData.cart || []);
+      setCustomerPhone(onResumeDraftData.customerPhone || '');
+      setCustomerName(onResumeDraftData.customerName || '');
+      setCustomerAddress(onResumeDraftData.customerAddress || '');
+      toast.info("Resumed draft bill into cart", "Draft Resumed");
+    }
+  }, [onResumeDraftData]);
+
+  // Bind Counter Hotkeys
+  useKeyboardShortcuts({
+    onF2: () => {
+      if (barcodeInputRef.current) barcodeInputRef.current.focus();
+    },
+    onF4: () => {
+      if (customerPhoneRef.current) customerPhoneRef.current.focus();
+    },
+    onF8: () => {
+      handleHoldBill();
+    },
+    onF9: () => {
+      if (totalAmountPaise > 0) {
+        setPaidRupees((totalAmountPaise / 100).toString());
+      }
+    },
+    onEsc: () => {
+      setShowCustomerSuggestions(false);
+    }
+  });
+
+  // Load products, recent sales, and customers
   const loadData = async () => {
     const prods = await getProducts();
     setProducts(prods);
     const purchases = await getPurchases();
     setRecentPurchases(purchases.slice(0, 5));
+    const custs = await getCustomers();
+    setAllCustomers(custs);
   };
 
   useEffect(() => {
@@ -62,34 +103,44 @@ export default function POSBilling({ onCompleteSale }) {
       addToCart(found);
       setBarcodeInput('');
     } else {
-      alert(`No product found with Barcode: ${barcodeInput}`);
+      toast.error(`No product found with Barcode: ${barcodeInput}`, "Item Not Found");
     }
   };
 
-  // Customer phone lookup
+  // Customer phone live auto-complete lookup
+  const cleanPhoneInput = customerPhone.replace(/\D/g, '');
+  const matchedCustomers = (cleanPhoneInput.length >= 1 || customerPhone.trim().length >= 1)
+    ? allCustomers.filter(c => {
+        const pMatch = c.phone && c.phone.replace(/\D/g, '').includes(cleanPhoneInput);
+        const nMatch = c.name && c.name.toLowerCase().includes(customerPhone.toLowerCase());
+        return pMatch || nMatch;
+      })
+    : [];
+
   useEffect(() => {
     const cleanPhone = customerPhone.replace(/\D/g, '');
-    if (cleanPhone.length === 10) {
-      setIsSearchingCustomer(true);
-      searchCustomerByPhone(cleanPhone).then(cust => {
-        setIsSearchingCustomer(false);
-        if (cust) {
-          setExistingCustomer(cust);
-          setCustomerName(cust.name);
-          setCustomerAddress(cust.address || '');
-        } else {
-          setExistingCustomer(null);
-        }
-      });
-    } else {
+    const exact = allCustomers.find(c => c.phone.replace(/\D/g, '') === cleanPhone);
+    if (exact) {
+      setExistingCustomer(exact);
+      setCustomerName(exact.name);
+      setCustomerAddress(exact.address || '');
+    } else if (cleanPhone.length < 10) {
       setExistingCustomer(null);
     }
-  }, [customerPhone]);
+  }, [customerPhone, allCustomers]);
+
+  const selectCustomer = (cust) => {
+    setCustomerPhone(cust.phone);
+    setCustomerName(cust.name);
+    setCustomerAddress(cust.address || '');
+    setExistingCustomer(cust);
+    setShowCustomerSuggestions(false);
+  };
 
   // Cart operations
   const addToCart = (product) => {
     if (product.currentStock <= 0) {
-      alert(`Out of stock: ${product.productName}`);
+      toast.warning(`Out of stock: ${product.productName}`, "Out of Stock");
       return;
     }
 
@@ -98,7 +149,7 @@ export default function POSBilling({ onCompleteSale }) {
       if (idx >= 0) {
         const updated = [...prev];
         if (updated[idx].qty + 1 > product.currentStock) {
-          alert(`Cannot exceed available stock (${product.currentStock})`);
+          toast.warning(`Cannot exceed available stock (${product.currentStock})`, "Stock Limit");
           return prev;
         }
         updated[idx].qty += 1;
@@ -128,7 +179,7 @@ export default function POSBilling({ onCompleteSale }) {
           const newQty = item.qty + delta;
           if (newQty <= 0) return null;
           if (newQty > item.currentStock) {
-            alert(`Stock limit reached (${item.currentStock})`);
+            toast.warning(`Stock limit reached (${item.currentStock})`, "Stock Limit");
             return item;
           }
           return {
@@ -143,7 +194,51 @@ export default function POSBilling({ onCompleteSale }) {
   };
 
   const removeFromCart = (barcode) => {
+    const itemToRemove = cart.find(item => item.barcode === barcode);
+    if (itemToRemove) {
+      setLastRemovedItem(itemToRemove);
+    }
     setCart(prev => prev.filter(item => item.barcode !== barcode));
+  };
+
+  const undoRemoveItem = () => {
+    if (lastRemovedItem) {
+      setCart(prev => [...prev, lastRemovedItem]);
+      setLastRemovedItem(null);
+      toast.info(`Restored "${lastRemovedItem.productName}" to cart`, "Item Restored");
+    }
+  };
+
+  const handleHoldBill = () => {
+    if (cart.length === 0) {
+      toast.warning("Cannot hold an empty bill! Add items to cart first.", "Empty Cart");
+      return;
+    }
+    const draft = {
+      id: 'DRAFT-' + Date.now(),
+      customerPhone,
+      customerName,
+      customerAddress,
+      cart,
+      totalAmount: totalAmountPaise,
+      createdAt: new Date().toISOString()
+    };
+    try {
+      const existing = JSON.parse(localStorage.getItem('volt_draft_invoices') || '[]');
+      const updated = [draft, ...existing];
+      localStorage.setItem('volt_draft_invoices', JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('volt_drafts_updated'));
+
+      setCart([]);
+      setCustomerPhone('');
+      setCustomerName('');
+      setCustomerAddress('');
+      setPaidRupees('');
+      setExistingCustomer(null);
+      toast.success("Active bill saved to Held Drafts!", "Bill Held");
+    } catch (e) {
+      toast.error("Failed to hold bill draft", "Draft Error");
+    }
   };
 
   // Financial calculations in Paise
@@ -152,33 +247,31 @@ export default function POSBilling({ onCompleteSale }) {
   const discountPaise = rupeesToPaise(discountRupees);
   const totalAmountPaise = Math.max(0, subtotalPaise - discountPaise);
 
-  // Default paid amount when payment method changes or total changes
+  // Payment calculation logic: leave paidRupees blank for user input
   useEffect(() => {
     if (paymentMethod === 'Credit/Due') {
       setPaidRupees('0');
-    } else if (paymentMethod !== 'Split') {
-      setPaidRupees(paiseToRupees(totalAmountPaise).toString());
     }
-  }, [paymentMethod, totalAmountPaise]);
+  }, [paymentMethod]);
 
   const paidAmountPaise = paymentMethod === 'Credit/Due' 
     ? 0 
-    : (paidRupees !== '' ? rupeesToPaise(paidRupees) : totalAmountPaise);
+    : (paidRupees !== '' ? rupeesToPaise(paidRupees) : 0);
 
   const dueAmountPaise = Math.max(0, totalAmountPaise - paidAmountPaise);
 
   // Process Checkout
   const handleCheckout = async () => {
     if (cart.length === 0) {
-      alert("Cart is empty! Add products first.");
+      toast.warning("Cart is empty! Add products first.", "Empty Cart");
       return;
     }
     if (!customerPhone.trim() || customerPhone.replace(/\D/g, '').length < 10) {
-      alert("Please enter a valid 10-digit Customer Mobile Number.");
+      toast.error("Please enter a valid 10-digit Customer Mobile Number.", "Invalid Input");
       return;
     }
     if (!customerName.trim()) {
-      alert("Please enter Customer Name.");
+      toast.error("Please enter Customer Name.", "Invalid Input");
       return;
     }
 
@@ -195,8 +288,8 @@ export default function POSBilling({ onCompleteSale }) {
         },
         items: cart,
         subtotal: subtotalPaise,
-        tax: taxPaise,
-        discounts: discountPaise,
+        taxAmount: taxPaise,
+        discountAmount: discountPaise,
         totalAmount: totalAmountPaise,
         paidAmount: paidAmountPaise,
         dueAmount: dueAmountPaise,
@@ -212,6 +305,8 @@ export default function POSBilling({ onCompleteSale }) {
         origin: { y: 0.6 }
       });
 
+      toast.success(`Invoice ${completedRecord.billNumber} created successfully!`, "Sale Completed");
+
       // Clear Form & Open Receipt
       setCart([]);
       setDiscountRupees('');
@@ -226,7 +321,7 @@ export default function POSBilling({ onCompleteSale }) {
       }
     } catch (err) {
       console.error("Sale commit failed:", err);
-      alert("Failed to complete transaction: " + err.message);
+      toast.error("Failed to complete transaction: " + err.message, "Transaction Error");
     } finally {
       setIsSubmitting(false);
     }
@@ -254,26 +349,25 @@ export default function POSBilling({ onCompleteSale }) {
           </div>
           <div>
             <h2 className="font-bold text-white text-lg font-sans">Active POS Checkout Engine</h2>
-            <p className="text-xs text-slate-400 font-mono">Scan barcode or search master inventory catalog</p>
+            <p className="text-xs text-slate-400 font-mono">Scan item barcode or search catalog (Press F2 for Barcode Focus)</p>
           </div>
         </div>
 
-        {/* Quick Barcode Scanner Box */}
-        <form onSubmit={handleBarcodeSubmit} className="flex items-center space-x-2 w-full md:w-96">
-          <div className="relative w-full">
+        <form onSubmit={handleBarcodeSubmit} className="flex items-center space-x-2 w-full md:w-auto">
+          <div className="relative w-full md:w-72">
+            <Barcode className="w-5 h-5 text-amber-400 absolute left-3 top-2.5" />
             <input
               ref={barcodeInputRef}
               type="text"
               value={barcodeInput}
               onChange={e => setBarcodeInput(e.target.value)}
-              placeholder="Scan Barcode (e.g., 890123400001)..."
-              className="w-full glass-input pl-9 pr-4 py-2.5 rounded-xl font-mono text-xs text-amber-400 font-semibold"
+              placeholder="Scan Barcode / Enter Code (F2)..."
+              className="w-full glass-input pl-10 pr-4 py-2 rounded-xl text-xs font-mono font-bold"
             />
-            <Barcode className="w-4 h-4 text-amber-400 absolute left-3 top-3" />
           </div>
           <button
             type="submit"
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl transition shrink-0"
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl transition shrink-0"
           >
             Add Item
           </button>
@@ -366,16 +460,44 @@ export default function POSBilling({ onCompleteSale }) {
                 <ShoppingCart className="w-5 h-5 text-amber-400" />
                 <h3 className="font-bold text-white text-base">Active Invoice Cart</h3>
               </div>
-              <span className="text-xs bg-amber-500/20 text-amber-400 font-mono px-2 py-0.5 rounded">
-                {cart.length} items
-              </span>
+              <div className="flex items-center space-x-2">
+                {cart.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleHoldBill}
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-mono font-bold transition"
+                    title="Hold Bill (F8)"
+                  >
+                    <PauseCircle className="w-3.5 h-3.5" />
+                    <span>Hold Bill (F8)</span>
+                  </button>
+                )}
+                <span className="text-xs bg-amber-500/20 text-amber-400 font-mono px-2 py-0.5 rounded">
+                  {cart.length} items
+                </span>
+              </div>
             </div>
+
+            {/* Undo Removed Item Banner */}
+            {lastRemovedItem && (
+              <div className="p-2.5 bg-amber-500/15 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-center justify-between animate-in fade-in">
+                <span>Removed <strong>{lastRemovedItem.productName}</strong></span>
+                <button
+                  type="button"
+                  onClick={undoRemoveItem}
+                  className="flex items-center space-x-1 font-bold text-white bg-amber-500 hover:bg-amber-400 text-black px-2 py-0.5 rounded text-[11px] transition"
+                >
+                  <RotateCcw className="w-3 h-3 text-black" />
+                  <span>Undo</span>
+                </button>
+              </div>
+            )}
 
             {/* Customer Lookup & Due Tracking Box */}
             <div className="bg-dark-900/90 border border-slate-800 p-3.5 rounded-xl space-y-2.5">
               <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
                 <span className="flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-amber-400" /> Customer Account Lookup
+                  <User className="w-3.5 h-3.5 text-amber-400" /> Customer Account Lookup (F4)
                 </span>
                 {existingCustomer && (
                   <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded">
@@ -384,21 +506,56 @@ export default function POSBilling({ onCompleteSale }) {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  value={customerPhone}
-                  onChange={e => setCustomerPhone(e.target.value)}
-                  placeholder="Mobile (10 Digits)*"
-                  className="glass-input px-3 py-1.5 rounded-lg text-xs font-mono"
-                  maxLength={10}
-                />
+              <div className="grid grid-cols-2 gap-2 relative">
+                <div className="relative">
+                  <input
+                    ref={customerPhoneRef}
+                    type="text"
+                    value={customerPhone}
+                    onChange={e => {
+                      setCustomerPhone(e.target.value);
+                      setShowCustomerSuggestions(true);
+                    }}
+                    onFocus={() => setShowCustomerSuggestions(true)}
+                    placeholder="Mobile (10 Digits)*"
+                    className="w-full glass-input px-3 py-1.5 rounded-lg text-xs font-mono text-amber-400 font-bold"
+                    maxLength={10}
+                  />
+
+                  {/* Auto-suggest dropdown when typing */}
+                  {showCustomerSuggestions && matchedCustomers.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-dark-900 border border-amber-500/40 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-800">
+                      {matchedCustomers.map(cust => (
+                        <div
+                          key={cust.id || cust.phone}
+                          onClick={() => selectCustomer(cust)}
+                          className="p-2.5 hover:bg-amber-500/15 cursor-pointer transition flex items-center justify-between text-xs"
+                        >
+                          <div>
+                            <div className="font-bold text-white flex items-center gap-1">
+                              <span>{cust.name}</span>
+                            </div>
+                            <div className="text-[11px] text-amber-400 font-mono">📱 {cust.phone}</div>
+                          </div>
+                          <div className="text-right text-[10px]">
+                            {(cust.totalDue || 0) > 0 ? (
+                              <span className="text-rose-400 font-mono font-bold">Due: ₹{formatNumberIN((cust.totalDue || 0) / 100)}</span>
+                            ) : (
+                              <span className="text-emerald-400 font-mono">Clean Ledger</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <input
                   type="text"
                   value={customerName}
                   onChange={e => setCustomerName(e.target.value)}
                   placeholder="Customer Name*"
-                  className="glass-input px-3 py-1.5 rounded-lg text-xs"
+                  className="glass-input px-3 py-1.5 rounded-lg text-xs font-bold text-white"
                 />
               </div>
 
@@ -471,12 +628,23 @@ export default function POSBilling({ onCompleteSale }) {
               {/* Amount Paid & Due Breakdown */}
               <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                 <div>
-                  <label className="block text-[11px] text-slate-400 font-mono mb-1">Amount Paid Now (₹)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] text-slate-400 font-mono">Amount Paid Now (₹)</label>
+                    {paymentMethod !== 'Credit/Due' && totalAmountPaise > 0 && (
+                      <button 
+                        type="button"
+                        onClick={() => setPaidRupees((totalAmountPaise / 100).toString())}
+                        className="text-[10px] text-amber-400 hover:text-amber-300 font-mono underline font-bold"
+                      >
+                        Full Pay (₹{formatNumberIN(totalAmountPaise / 100)})
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="number"
                     value={paidRupees}
                     onChange={e => setPaidRupees(e.target.value)}
-                    placeholder="0.00"
+                    placeholder="Enter amount paid (₹)"
                     disabled={paymentMethod === 'Credit/Due'}
                     className="w-full glass-input px-3 py-1.5 rounded-lg font-mono text-emerald-400 font-bold"
                   />

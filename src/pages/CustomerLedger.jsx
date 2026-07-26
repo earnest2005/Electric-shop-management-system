@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, AlertCircle, CheckCircle2, History, Plus, Phone, MapPin, ArrowDownRight, X, Send, Receipt, Calendar, CreditCard, ChevronRight, Trash2 } from 'lucide-react';
+import { Users, Search, AlertCircle, CheckCircle2, History, Plus, Phone, MapPin, ArrowDownRight, X, Send, Receipt, Calendar, CreditCard, ChevronRight, Trash2, Download, MessageSquare } from 'lucide-react';
 import { formatRupees, rupeesToPaise, formatNumberIN } from '../utils/currency';
 import { getCustomers, recordDuePayment, getCustomerPayments, getPurchases, saveCustomer, deleteCustomer } from '../services/db';
+import { useAlert } from '../context/AlertContext';
+import { exportCustomerLedgerCSV } from '../utils/exporter';
 
 export default function CustomerLedger() {
+  const { toast, confirm } = useAlert();
   const [customers, setCustomers] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +45,25 @@ export default function CustomerLedger() {
     return () => window.removeEventListener('volt_db_updated', loadData);
   }, []);
 
+  const handleSendWhatsAppReminder = (customer) => {
+    const cleanPhone = customer.phone.replace(/\D/g, '');
+    const phoneWithCode = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    const dueAmountStr = formatRupees(customer.totalDue);
+    const message = encodeURIComponent(
+      `Dear ${customer.name},\n\nThis is a friendly payment reminder from Volt Electricals regarding your outstanding balance of ${dueAmountStr}.\n\nPlease arrange for payment at your earliest convenience.\n\nThank you!`
+    );
+    window.open(`https://wa.me/${phoneWithCode}?text=${message}`, '_blank');
+  };
+
+  const handleExportLedger = () => {
+    if (customers.length === 0) {
+      toast.warning("No customer records found to export.", "Empty Ledger");
+      return;
+    }
+    exportCustomerLedgerCSV(customers);
+    toast.success("Exported customer ledger statement CSV!", "Export Downloaded");
+  };
+
   // Filter customers for directory & dues
   const filteredCustomers = customers.filter(c => {
     const matchSearch = 
@@ -69,10 +91,17 @@ export default function CustomerLedger() {
   };
 
   const handleDeleteCustomer = async (cust) => {
-    if (!confirm(`Delete customer profile for ${cust.name} (+91 ${cust.phone}) permanently from Firebase & Local storage?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Delete Customer Profile',
+      message: `Delete customer profile for ${cust.name} (+91 ${cust.phone}) permanently from Firebase & Local storage?`,
+      confirmText: 'Delete Customer',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    if (!ok) return;
+
     await deleteCustomer(cust.phone);
+    toast.success(`Customer profile for ${cust.name} deleted.`, 'Customer Deleted');
     loadData();
   };
 
@@ -88,12 +117,19 @@ export default function CustomerLedger() {
   const handleSubmitRepayment = async (e) => {
     e.preventDefault();
     if (!payAmountRupees || parseFloat(payAmountRupees) <= 0) {
-      alert("Enter a valid payment amount.");
+      toast.error("Enter a valid payment amount.", "Invalid Input");
       return;
     }
     const paise = rupeesToPaise(payAmountRupees);
     if (paise > selectedCustomer.totalDue) {
-      if (!confirm("Payment amount exceeds current due. Proceed anyway?")) return;
+      const ok = await confirm({
+        title: 'Excess Payment Warning',
+        message: 'Payment amount exceeds current due balance. Proceed anyway?',
+        confirmText: 'Proceed',
+        cancelText: 'Cancel',
+        variant: 'warning'
+      });
+      if (!ok) return;
     }
 
     setIsSubmitting(true);
@@ -107,14 +143,14 @@ export default function CustomerLedger() {
         notes: payNotes
       });
 
-      alert(`Payment of ${formatRupees(paise)} recorded successfully!`);
+      toast.success(`Payment of ${formatRupees(paise)} recorded successfully!`, "Payment Recorded");
       setSelectedCustomer(null);
       setPayAmountRupees('');
       setRefNo('');
       setPayNotes('');
       loadData();
     } catch (err) {
-      alert("Failed to record payment: " + err.message);
+      toast.error("Failed to record payment: " + err.message, "Payment Failure");
     } finally {
       setIsSubmitting(false);
     }
@@ -125,11 +161,11 @@ export default function CustomerLedger() {
     e.preventDefault();
     const cleanPhone = newCustPhone.replace(/\D/g, '');
     if (!cleanPhone || cleanPhone.length < 10) {
-      alert("Enter valid 10 digit mobile number.");
+      toast.error("Enter valid 10 digit mobile number.", "Invalid Input");
       return;
     }
     if (!newCustName.trim()) {
-      alert("Enter customer name.");
+      toast.error("Enter customer name.", "Invalid Input");
       return;
     }
 
@@ -139,6 +175,7 @@ export default function CustomerLedger() {
       address: newCustAddress.trim() || 'Local Customer'
     });
 
+    toast.success(`Customer profile for ${newCustName} created successfully!`, "Profile Saved");
     setShowAddModal(false);
     setNewCustPhone('');
     setNewCustName('');
@@ -161,13 +198,23 @@ export default function CustomerLedger() {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-extrabold text-xs rounded-xl shadow-lg transition self-start md:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>ADD NEW CUSTOMER</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          <button
+            onClick={handleExportLedger}
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs rounded-xl transition"
+            title="Export Customer Ledger Statement CSV"
+          >
+            <Download className="w-4 h-4 text-amber-400" />
+            <span>Export Ledger CSV</span>
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-extrabold text-xs rounded-xl shadow-lg transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>ADD NEW CUSTOMER</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -417,12 +464,22 @@ export default function CustomerLedger() {
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center space-x-2">
                             {(cust.totalDue || 0) > 0 && (
-                              <button
-                                onClick={() => handleOpenRepayment(cust)}
-                                className="px-3 py-1.5 bg-rose-500 hover:bg-rose-400 text-white font-bold rounded-lg text-xs transition shadow-md shadow-rose-500/20"
-                              >
-                                Record Due
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleSendWhatsAppReminder(cust)}
+                                  className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold rounded-lg text-xs transition flex items-center space-x-1"
+                                  title="Send WhatsApp Payment Reminder"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  <span>WhatsApp</span>
+                                </button>
+                                <button
+                                  onClick={() => handleOpenRepayment(cust)}
+                                  className="px-3 py-1.5 bg-rose-500 hover:bg-rose-400 text-white font-bold rounded-lg text-xs transition shadow-md shadow-rose-500/20"
+                                >
+                                  Record Due
+                                </button>
+                              </>
                             )}
                             <button
                               onClick={() => handleOpenCustomerHistory(cust)}

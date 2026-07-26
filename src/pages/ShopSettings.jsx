@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Store, Phone, MapPin, FileText, CheckCircle2, Save, Zap, Database, Loader2, Trash2, AlertTriangle } from 'lucide-react';
-import { getShopDetails, saveShopDetails, DEFAULT_SHOP_DETAILS, clearBillsAndCustomers } from '../services/db';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, Store, Phone, MapPin, FileText, CheckCircle2, Save, Zap, Database, Loader2, Trash2, AlertTriangle, KeyRound, Lock, ShieldCheck, Download, Upload } from 'lucide-react';
+import { getShopDetails, saveShopDetails, DEFAULT_SHOP_DETAILS, clearBillsAndCustomers, getProducts, getPurchases, getCustomers, saveProduct } from '../services/db';
+import { useAlert } from '../context/AlertContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function ShopSettings() {
+  const { toast, confirm } = useAlert();
+  const { changePassword } = useAuth();
+  const backupInputRef = useRef(null);
+
   const [shopName, setShopName] = useState(DEFAULT_SHOP_DETAILS.shopName);
   const [tagline, setTagline] = useState(DEFAULT_SHOP_DETAILS.tagline);
   const [ownerName, setOwnerName] = useState(DEFAULT_SHOP_DETAILS.ownerName);
@@ -11,6 +17,13 @@ export default function ShopSettings() {
   const [gstin, setGstin] = useState(DEFAULT_SHOP_DETAILS.gstin);
   const [invoiceFooterNote, setInvoiceFooterNote] = useState(DEFAULT_SHOP_DETAILS.invoiceFooterNote);
   const [defaultTaxPercent, setDefaultTaxPercent] = useState(DEFAULT_SHOP_DETAILS.defaultTaxPercent.toString());
+
+  // Password state
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [isChangingPass, setIsChangingPass] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -36,10 +49,109 @@ export default function ShopSettings() {
     load();
   }, []);
 
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!currentPasswordInput) {
+      toast.error("Please enter your current password.", "Validation Error");
+      return;
+    }
+    if (!newPasswordInput || newPasswordInput.length < 3) {
+      toast.error("New password must be at least 3 characters long.", "Validation Error");
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      toast.error("New Password and Confirm Password do not match.", "Validation Error");
+      return;
+    }
+
+    setIsChangingPass(true);
+    try {
+      await changePassword(currentPasswordInput, newPasswordInput);
+      toast.success("Terminal access password changed & synced with Cloud Firestore!", "Password Updated");
+      setCurrentPasswordInput('');
+      setNewPasswordInput('');
+      setConfirmPasswordInput('');
+    } catch (err) {
+      toast.error(err.message, "Password Error");
+    } finally {
+      setIsChangingPass(false);
+    }
+  };
+
+  const handleCloudSync = async () => {
+    setIsSyncing(true);
+    try {
+      const prods = await getProducts();
+      for (const p of prods) {
+        await saveProduct(p);
+      }
+      toast.success("All products, sales bills, customer ledgers & shop details synced with Cloud Firestore!", "Cloud Sync Complete");
+    } catch (err) {
+      toast.error(err.message, "Cloud Sync Error");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleExportBackupJSON = async () => {
+    try {
+      const products = await getProducts();
+      const purchases = await getPurchases();
+      const customers = await getCustomers();
+      const shop = await getShopDetails();
+
+      const backupObj = {
+        app: 'Volt Electrical POS',
+        version: '2.5',
+        exportedAt: new Date().toISOString(),
+        products,
+        purchases,
+        customers,
+        shop
+      };
+
+      const jsonStr = JSON.stringify(backupObj, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `volt_pos_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Full system backup exported to JSON file!", "Backup Downloaded");
+    } catch (e) {
+      toast.error("Failed to generate backup file", "Export Error");
+    }
+  };
+
+  const handleRestoreBackupJSON = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const backupObj = JSON.parse(evt.target.result);
+        if (backupObj.products) localStorage.setItem('volt_db_products', JSON.stringify(backupObj.products));
+        if (backupObj.purchases) localStorage.setItem('volt_db_purchases', JSON.stringify(backupObj.purchases));
+        if (backupObj.customers) localStorage.setItem('volt_db_customers', JSON.stringify(backupObj.customers));
+        if (backupObj.shop) localStorage.setItem('volt_db_shop_details', JSON.stringify(backupObj.shop));
+
+        window.dispatchEvent(new CustomEvent('volt_db_updated'));
+        toast.success("System restored successfully from JSON backup file!", "Restore Complete");
+      } catch (err) {
+        toast.error("Invalid backup JSON file format", "Restore Error");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!shopName.trim()) {
-      alert("Shop Name cannot be empty.");
+      toast.error("Shop Name cannot be empty.", "Validation Error");
       return;
     }
 
@@ -61,27 +173,35 @@ export default function ShopSettings() {
 
       await saveShopDetails(updatedDetails);
       setSavedSuccess(true);
+      toast.success("Shop settings saved successfully!", "Settings Saved");
       setTimeout(() => setSavedSuccess(false), 4000);
     } catch (err) {
       console.error("Failed to save shop settings:", err);
-      alert("Error saving settings: " + err.message);
+      toast.error("Error saving settings: " + err.message, "Save Failed");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleClearData = async () => {
-    if (!confirm("Are you sure you want to permanently clear all bills, customer profiles, and due records? Inventory products will be kept.")) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Danger Zone: Wipe Bills & Customer Records',
+      message: 'Are you sure you want to permanently clear all bills, customer profiles, and due records? Inventory products will be kept.',
+      confirmText: 'Wipe Records',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+
+    if (!ok) return;
 
     setIsClearing(true);
     try {
       await clearBillsAndCustomers();
       setClearSuccess(true);
+      toast.success("All historical bills and customer records wiped clean!", "Reset Complete");
       setTimeout(() => setClearSuccess(false), 5000);
     } catch (err) {
-      alert("Error clearing database: " + err.message);
+      toast.error("Error clearing database: " + err.message, "Reset Failed");
     } finally {
       setIsClearing(false);
     }
@@ -247,7 +367,125 @@ export default function ShopSettings() {
           </div>
         </div>
 
-        {/* Card 4: Database Data Reset / Wipe Bills & Customers */}
+        {/* Card 4: Terminal Access & Security Password */}
+        <div className="glass-panel p-6 rounded-2xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center space-x-2 text-amber-400 font-semibold text-sm">
+              <KeyRound className="w-5 h-5" />
+              <span>Terminal Access Password & Security</span>
+            </div>
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3" /> CLOUD & LOCAL SYNCED
+            </span>
+          </div>
+
+          <div className="text-xs space-y-3 font-sans">
+            <p className="text-slate-300 font-mono text-[11px]">
+              Update the terminal password used to unlock POS billing, inventory, and customer ledgers. Password changes are saved to Cloud Firestore and sync automatically across all devices.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">Current Password*</label>
+                <input
+                  type="password"
+                  value={currentPasswordInput}
+                  onChange={e => setCurrentPasswordInput(e.target.value)}
+                  placeholder="Enter current password..."
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">New Password*</label>
+                <input
+                  type="password"
+                  value={newPasswordInput}
+                  onChange={e => setNewPasswordInput(e.target.value)}
+                  placeholder="Enter new password..."
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono text-amber-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">Confirm New Password*</label>
+                <input
+                  type="password"
+                  value={confirmPasswordInput}
+                  onChange={e => setConfirmPasswordInput(e.target.value)}
+                  placeholder="Re-enter new password..."
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono text-amber-300"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={handleChangePasswordSubmit}
+                disabled={isChangingPass}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl shadow-lg transition flex items-center space-x-1.5 disabled:opacity-50"
+              >
+                {isChangingPass ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>UPDATING PASSWORD...</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>UPDATE PASSWORD</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: JSON Backup & Offline System Export */}
+        <div className="glass-panel p-6 rounded-2xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center space-x-2 text-amber-400 font-semibold text-sm">
+              <Database className="w-5 h-5" />
+              <span>Full System Data Backup & Restore</span>
+            </div>
+            <span className="text-xs bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded font-mono">
+              OFFLINE PROTECTED
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-300 font-mono">
+            Download an offline JSON file containing all products, sales history, customer dues, and shop settings for emergency backup or offline transfer.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="file"
+              ref={backupInputRef}
+              onChange={handleRestoreBackupJSON}
+              accept=".json"
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={handleExportBackupJSON}
+              className="flex items-center space-x-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl shadow-lg transition"
+            >
+              <Download className="w-4 h-4" />
+              <span>DOWNLOAD SYSTEM BACKUP (JSON)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => backupInputRef.current?.click()}
+              className="flex items-center space-x-2 px-4 py-2.5 bg-dark-800 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs rounded-xl transition"
+            >
+              <Upload className="w-4 h-4 text-amber-400" />
+              <span>RESTORE FROM BACKUP FILE</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 5: Database Data Reset / Wipe Bills & Customers */}
         <div className="p-6 rounded-2xl bg-rose-500/5 border border-rose-500/20 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 text-rose-400 font-semibold text-sm">

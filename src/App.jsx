@@ -1,19 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { AlertProvider } from './context/AlertContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import POSBilling from './pages/POSBilling';
-import CustomerLedger from './pages/CustomerLedger';
-import InventoryMaster from './pages/InventoryMaster';
-import SalesHistory from './pages/SalesHistory';
-import DashboardAnalytics from './pages/DashboardAnalytics';
-import ShopSettings from './pages/ShopSettings';
+import LockScreen from './components/LockScreen';
 import ReceiptModal from './components/ReceiptModal';
-import FirebaseConfigModal from './components/FirebaseConfigModal';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+import DraftInvoicesModal from './components/DraftInvoicesModal';
 
-export default function App() {
+// Code-split page components for instant initial bundle rendering
+const POSBilling = lazy(() => import('./pages/POSBilling'));
+const CustomerLedger = lazy(() => import('./pages/CustomerLedger'));
+const InventoryMaster = lazy(() => import('./pages/InventoryMaster'));
+const SalesHistory = lazy(() => import('./pages/SalesHistory'));
+const DashboardAnalytics = lazy(() => import('./pages/DashboardAnalytics'));
+const ShopSettings = lazy(() => import('./pages/ShopSettings'));
+
+// Fallback loader component
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[600px]">
+      <div className="flex flex-col items-center space-y-3">
+        <div className="w-10 h-10 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div>
+        <p className="text-xs font-mono text-slate-400">Loading module...</p>
+      </div>
+    </div>
+  );
+}
+
+function MainAppContent() {
+  const { isAuthenticated } = useAuth();
   const [currentView, setCurrentView] = useState('pos');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [showFirebaseModal, setShowFirebaseModal] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showDraftsModal, setShowDraftsModal] = useState(false);
+  const [draftInvoices, setDraftInvoices] = useState([]);
+  const [activeResumedDraft, setActiveResumedDraft] = useState(null);
+
+  const loadDrafts = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('volt_draft_invoices') || '[]');
+      setDraftInvoices(saved);
+    } catch (e) {
+      setDraftInvoices([]);
+    }
+  };
+
+  useEffect(() => {
+    loadDrafts();
+    window.addEventListener('volt_drafts_updated', loadDrafts);
+    return () => window.removeEventListener('volt_drafts_updated', loadDrafts);
+  }, []);
 
   const handleCompleteSale = (completedInvoice) => {
     setSelectedInvoice(completedInvoice);
@@ -23,12 +61,34 @@ export default function App() {
     setSelectedInvoice(invoice);
   };
 
+  const handleResumeDraft = (draft) => {
+    setActiveResumedDraft(draft);
+    // Remove resumed draft from storage
+    const updated = draftInvoices.filter(d => d.id !== draft.id);
+    localStorage.setItem('volt_draft_invoices', JSON.stringify(updated));
+    setDraftInvoices(updated);
+    setShowDraftsModal(false);
+    setCurrentView('pos');
+  };
+
+  const handleDeleteDraft = (draftId) => {
+    const updated = draftInvoices.filter(d => d.id !== draftId);
+    localStorage.setItem('volt_draft_invoices', JSON.stringify(updated));
+    setDraftInvoices(updated);
+  };
+
+  if (!isAuthenticated) {
+    return <LockScreen />;
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-dark-900 text-slate-100 font-sans">
+    <div className="min-h-screen flex flex-col bg-dark-900 text-slate-100 font-sans transition-colors duration-300">
       {/* Top Navbar Header */}
       <Navbar 
-        onOpenFirebaseConfig={() => setShowFirebaseModal(true)} 
         currentView={currentView}
+        onOpenShortcuts={() => setShowShortcutsModal(true)}
+        onOpenDrafts={() => setShowDraftsModal(true)}
+        draftCount={draftInvoices.length}
       />
 
       {/* Main Layout Container */}
@@ -40,30 +100,35 @@ export default function App() {
         />
 
         {/* View Content Area */}
-        <main className="flex-1 overflow-y-auto">
-          {currentView === 'pos' && (
-            <POSBilling onCompleteSale={handleCompleteSale} />
-          )}
+        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
+          <Suspense fallback={<PageLoader />}>
+            {currentView === 'pos' && (
+              <POSBilling 
+                onCompleteSale={handleCompleteSale} 
+                onResumeDraftData={activeResumedDraft}
+              />
+            )}
 
-          {currentView === 'dues' && (
-            <CustomerLedger />
-          )}
+            {currentView === 'dues' && (
+              <CustomerLedger />
+            )}
 
-          {currentView === 'inventory' && (
-            <InventoryMaster />
-          )}
+            {currentView === 'inventory' && (
+              <InventoryMaster />
+            )}
 
-          {currentView === 'history' && (
-            <SalesHistory onViewReceipt={handleViewReceipt} />
-          )}
+            {currentView === 'history' && (
+              <SalesHistory onViewReceipt={handleViewReceipt} />
+            )}
 
-          {currentView === 'analytics' && (
-            <DashboardAnalytics onNavigate={setCurrentView} />
-          )}
+            {currentView === 'analytics' && (
+              <DashboardAnalytics onNavigate={setCurrentView} />
+            )}
 
-          {currentView === 'settings' && (
-            <ShopSettings />
-          )}
+            {currentView === 'settings' && (
+              <ShopSettings />
+            )}
+          </Suspense>
         </main>
       </div>
 
@@ -75,12 +140,34 @@ export default function App() {
         />
       )}
 
-      {/* Firebase SDK Config Credentials Modal */}
-      {showFirebaseModal && (
-        <FirebaseConfigModal
-          onClose={() => setShowFirebaseModal(false)}
+      {/* Counter Keyboard Hotkeys Modal */}
+      {showShortcutsModal && (
+        <KeyboardShortcutsModal
+          onClose={() => setShowShortcutsModal(false)}
+        />
+      )}
+
+      {/* Held Draft Invoices Modal */}
+      {showDraftsModal && (
+        <DraftInvoicesModal
+          draftInvoices={draftInvoices}
+          onResumeDraft={handleResumeDraft}
+          onDeleteDraft={handleDeleteDraft}
+          onClose={() => setShowDraftsModal(false)}
         />
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AlertProvider>
+        <AuthProvider>
+          <MainAppContent />
+        </AuthProvider>
+      </AlertProvider>
+    </ThemeProvider>
   );
 }

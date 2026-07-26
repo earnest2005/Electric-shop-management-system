@@ -26,6 +26,7 @@ export default function DashboardAnalytics({ onNavigate }) {
   const totalRevenue = purchases.reduce((acc, p) => acc + p.totalAmount, 0);
   const totalPaidRevenue = purchases.reduce((acc, p) => acc + p.paidAmount, 0);
   const totalOutstandingDues = customers.reduce((acc, c) => acc + (c.totalDue || 0), 0);
+  const totalInventoryValuation = products.reduce((acc, p) => acc + ((p.basePrice || 0) * (p.currentStock || 0)), 0);
   const lowStockItems = products.filter(prod => prod.currentStock <= prod.minStockAlert);
 
   // Calculate payment mode distribution
@@ -85,11 +86,11 @@ export default function DashboardAnalytics({ onNavigate }) {
 
         <div className="glass-panel p-4 rounded-2xl space-y-2">
           <div className="flex justify-between items-center text-xs text-slate-400">
-            <span>Total Sales Billed</span>
-            <ShoppingBag className="w-4 h-4 text-amber-400" />
+            <span>Total Catalog Valuation</span>
+            <DollarSign className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl font-extrabold text-white font-mono">{purchases.length} Invoices</div>
-          <div className="text-[11px] text-slate-400 font-mono">100% Paise Integer Stored</div>
+          <div className="text-2xl font-extrabold text-amber-400 font-mono">{formatRupees(totalInventoryValuation)}</div>
+          <div className="text-[11px] text-slate-400 font-mono">{products.length} Products Stocked</div>
         </div>
 
         <div className="glass-panel p-4 rounded-2xl space-y-2">

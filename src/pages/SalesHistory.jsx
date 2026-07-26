@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Receipt, Search, Eye, Printer, Calendar, User, Phone, CheckCircle, AlertCircle, FileText, Trash2 } from 'lucide-react';
+import { Receipt, Search, Eye, Printer, Calendar, User, Phone, CheckCircle, AlertCircle, FileText, Trash2, Download } from 'lucide-react';
 import { formatRupees } from '../utils/currency';
 import { getPurchases, deleteInvoice } from '../services/db';
+import { useAlert } from '../context/AlertContext';
+import { exportSalesCSV } from '../utils/exporter';
 
 export default function SalesHistory({ onViewReceipt }) {
+  const { toast, confirm } = useAlert();
   const [purchases, setPurchases] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Paid' | 'Due'
+  const [dateRange, setDateRange] = useState('All Time'); // 'All Time' | 'Today' | 'This Week' | 'This Month'
 
   const loadData = async () => {
     const data = await getPurchases();
@@ -14,10 +18,17 @@ export default function SalesHistory({ onViewReceipt }) {
   };
 
   const handleDeleteInvoice = async (invoice) => {
-    if (!confirm(`Delete invoice ${invoice.billNumber} permanently from Firebase & Local storage?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Delete Billing Invoice',
+      message: `Delete invoice ${invoice.billNumber} permanently from Firebase & Local storage?`,
+      confirmText: 'Delete Invoice',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    });
+    if (!ok) return;
+
     await deleteInvoice(invoice.billNumber);
+    toast.success(`Invoice ${invoice.billNumber} deleted successfully.`, "Invoice Deleted");
     loadData();
   };
 
@@ -27,15 +38,38 @@ export default function SalesHistory({ onViewReceipt }) {
     return () => window.removeEventListener('volt_db_updated', loadData);
   }, []);
 
+  const handleExportCSV = () => {
+    if (filteredPurchases.length === 0) {
+      toast.warning("No sales transactions available to export.", "Empty Sales Log");
+      return;
+    }
+    exportSalesCSV(filteredPurchases);
+    toast.success("Exported sales invoices report CSV!", "Export Downloaded");
+  };
+
   const filteredPurchases = purchases.filter(p => {
     const matchSearch = 
       p.billNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.customerPhone.includes(searchQuery);
+      (p.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.customerPhone || '').includes(searchQuery);
 
     if (!matchSearch) return false;
-    if (statusFilter === 'Paid') return (p.dueAmount || 0) === 0;
-    if (statusFilter === 'Due') return (p.dueAmount || 0) > 0;
+    if (statusFilter === 'Paid' && (p.dueAmount || 0) > 0) return false;
+    if (statusFilter === 'Due' && (p.dueAmount || 0) <= 0) return false;
+
+    if (dateRange !== 'All Time' && p.timestamp) {
+      const pDate = new Date(p.timestamp);
+      const now = new Date();
+      if (dateRange === 'Today') {
+        if (pDate.toDateString() !== now.toDateString()) return false;
+      } else if (dateRange === 'This Week') {
+        const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
+        if (pDate < sevenDaysAgo) return false;
+      } else if (dateRange === 'This Month') {
+        if (pDate.getMonth() !== new Date().getMonth() || pDate.getFullYear() !== new Date().getFullYear()) return false;
+      }
+    }
+
     return true;
   });
 
@@ -54,6 +88,15 @@ export default function SalesHistory({ onViewReceipt }) {
             Deterministic search and reprint center for all generated electrical billing invoices
           </p>
         </div>
+
+        <button
+          onClick={handleExportCSV}
+          className="flex items-center space-x-1.5 px-3.5 py-2 bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs rounded-xl transition self-start md:self-auto"
+          title="Export Filtered Sales Report to CSV"
+        >
+          <Download className="w-4 h-4 text-amber-400" />
+          <span>Export Sales CSV</span>
+        </button>
       </div>
 
       {/* KPI Cards */}
@@ -80,20 +123,31 @@ export default function SalesHistory({ onViewReceipt }) {
 
       {/* Controls */}
       <div className="glass-panel p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           {['All', 'Paid', 'Due'].map(st => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 statusFilter === st
                   ? 'bg-amber-500 text-black shadow-md'
                   : 'bg-dark-800 text-slate-400 hover:text-white border border-slate-800'
               }`}
             >
-              {st === 'All' ? 'All Invoices' : st === 'Paid' ? 'Fully Paid' : 'With Pending Dues'}
+              {st === 'All' ? 'All Invoices' : st === 'Paid' ? 'Fully Paid' : 'Pending Dues'}
             </button>
           ))}
+
+          <select
+            value={dateRange}
+            onChange={e => setDateRange(e.target.value)}
+            className="glass-input px-3 py-1.5 rounded-xl text-xs font-mono font-bold text-amber-400 bg-dark-800"
+          >
+            <option value="All Time">🗓️ All Time</option>
+            <option value="Today">⚡ Today</option>
+            <option value="This Week">📅 This Week</option>
+            <option value="This Month">📆 This Month</option>
+          </select>
         </div>
 
         <div className="relative w-full md:w-80">

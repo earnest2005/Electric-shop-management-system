@@ -1,34 +1,21 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  enableMultiTabIndexedDbPersistence 
-} from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 
-// Default Live Project Config for electrical-shop-system-8aee0
-const LIVE_FIREBASE_CONFIG = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDrJ8gZptziQ_qMeJMJoRb1_-cTGaeqQIM",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "electrical-shop-system-8aee0.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "electrical-shop-system-8aee0",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "electrical-shop-system-8aee0.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "370945983076",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:370945983076:web:9371859990bb9a0a6e5571"
+// ==========================================================================
+// 💡 PASTE YOUR FIREBASE CONFIG API KEYS DIRECTLY HERE BELOW:
+// ==========================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDrJ8gZptziQ_qMeJMJoRb1_-cTGaeqQIM",
+  authDomain: "electrical-shop-system-8aee0.firebaseapp.com",
+  projectId: "electrical-shop-system-8aee0",
+  storageBucket: "electrical-shop-system-8aee0.firebasestorage.app",
+  messagingSenderId: "370945983076",
+  appId: "1:370945983076:web:9371859990bb9a0a6e5571"
 };
+// ==========================================================================
 
 export function getFirebaseConfig() {
-  // Check LocalStorage override if custom keys were saved
-  try {
-    const saved = localStorage.getItem('volt_firebase_config');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.apiKey && !parsed.apiKey.includes('your_api_key')) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.warn("Could not parse saved firebase config:", e);
-  }
-
-  return LIVE_FIREBASE_CONFIG;
+  return firebaseConfig;
 }
 
 export function saveStoredFirebaseConfig(config) {
@@ -37,35 +24,24 @@ export function saveStoredFirebaseConfig(config) {
 }
 
 export function getStoredFirebaseConfig() {
-  return getFirebaseConfig();
+  return firebaseConfig;
 }
 
 let app;
 let db;
 let isRealFirebase = true;
 
-const currentConfig = getFirebaseConfig();
-
 try {
   if (!getApps().length) {
-    app = initializeApp(currentConfig);
+    app = initializeApp(firebaseConfig);
   } else {
     app = getApp();
   }
   
+  // Clean direct Firestore connection (without IndexedDB multi-tab locking)
   db = getFirestore(app);
-
-  // Enable multi-tab offline persistence
-  enableMultiTabIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('Firestore persistence warning: Multiple tabs open');
-    } else if (err.code === 'unimplemented') {
-      console.warn('Firestore persistence unsupported in browser');
-    }
-  });
-
   isRealFirebase = true;
-  console.log("🔥 Connected to Live Firebase Cloud Firestore project:", currentConfig.projectId);
+  console.log("🔥 Connected to Firebase Cloud Firestore project:", firebaseConfig.projectId);
 } catch (error) {
   console.warn("Firebase initialization warning:", error.message);
   isRealFirebase = true;
