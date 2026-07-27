@@ -39,12 +39,84 @@ function PageLoader() {
   );
 }
 
+// Helper to map pathname to internal view key
+const getRequestedViewFromPath = (path) => {
+  const cleanPath = (path || '/').toLowerCase().trim().replace(/\/$/, '') || '/';
+  switch (cleanPath) {
+    case '/admin':
+    case '/admin-dashboard':
+      return 'admin-dashboard';
+    case '/customer-records':
+    case '/customers':
+      return 'customer-records';
+    case '/bill-records':
+    case '/bills':
+      return 'bill-records';
+    case '/offers':
+    case '/offer-management':
+      return 'offers';
+    case '/reports':
+    case '/reports-analytics':
+      return 'reports';
+    case '/settings':
+    case '/shop-settings':
+      return 'settings';
+    case '/staff':
+    case '/staff-dashboard':
+      return 'staff-dashboard';
+    case '/pos':
+    case '/billing':
+      return 'pos';
+    case '/dues':
+    case '/customer-ledger':
+      return 'dues';
+    case '/inventory':
+    case '/inventory-master':
+      return 'inventory';
+    case '/history':
+    case '/sales-history':
+      return 'history';
+    case '/active-offers':
+      return 'active-offers';
+    default:
+      return null;
+  }
+};
+
+const getPathFromView = (view) => {
+  switch (view) {
+    case 'admin-dashboard': return '/admin';
+    case 'customer-records': return '/customer-records';
+    case 'bill-records': return '/bill-records';
+    case 'offers': return '/offers';
+    case 'reports': return '/reports';
+    case 'settings': return '/settings';
+    case 'staff-dashboard': return '/staff';
+    case 'pos': return '/billing';
+    case 'dues': return '/dues';
+    case 'inventory': return '/inventory';
+    case 'history': return '/history';
+    case 'active-offers': return '/active-offers';
+    default: return '/login';
+  }
+};
+
+const adminRestrictedViews = ['admin-dashboard', 'customer-records', 'bill-records', 'offers', 'reports', 'settings'];
+
 function MainAppContent() {
   const { isAuthenticated, userRole } = useAuth();
   const { toast } = useAlert();
 
-  // Initial view based on userRole
+  // Initial view based on auth state, requested URL path, and userRole
   const [currentView, setCurrentView] = useState(() => {
+    if (!isAuthenticated) return 'login';
+    const pathView = getRequestedViewFromPath(window.location.pathname);
+    if (pathView) {
+      if (userRole === 'staff' && adminRestrictedViews.includes(pathView)) {
+        return 'staff-dashboard';
+      }
+      return pathView;
+    }
     return userRole === 'admin' ? 'admin-dashboard' : 'staff-dashboard';
   });
 
@@ -55,26 +127,71 @@ function MainAppContent() {
   const [activeResumedDraft, setActiveResumedDraft] = useState(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // Sync view when role changes on login
+  // Sync auth state, URL, and route protection
   useEffect(() => {
-    if (userRole === 'admin' && (currentView === 'staff-dashboard' || currentView === 'pos')) {
-      setCurrentView('admin-dashboard');
-    } else if (userRole === 'staff' && (currentView === 'admin-dashboard' || currentView === 'reports' || currentView === 'settings')) {
-      setCurrentView('staff-dashboard');
+    if (!isAuthenticated) {
+      if (window.location.pathname !== '/login') {
+        window.history.replaceState(null, '', '/login');
+      }
+      return;
     }
-  }, [userRole]);
 
-  // Handle protected navigation with role checks
-  const handleNavigate = (requestedView) => {
-    const staffRestrictedViews = ['admin-dashboard', 'reports', 'settings', 'offers', 'bill-records', 'customer-records'];
-
-    if (userRole === 'staff' && staffRestrictedViews.includes(requestedView)) {
+    const pathView = getRequestedViewFromPath(window.location.pathname);
+    if (!pathView || window.location.pathname === '/login' || window.location.pathname === '/') {
+      const defaultView = userRole === 'admin' ? 'admin-dashboard' : 'staff-dashboard';
+      setCurrentView(defaultView);
+      window.history.replaceState(null, '', getPathFromView(defaultView));
+    } else if (userRole === 'staff' && adminRestrictedViews.includes(pathView)) {
       toast.warning("Access Restricted: Staff members do not have permission to view Admin modules.", "Permission Denied");
       setCurrentView('staff-dashboard');
+      window.history.replaceState(null, '', '/staff');
+    } else {
+      setCurrentView(pathView);
+    }
+  }, [isAuthenticated, userRole]);
+
+  // Listen for browser Back/Forward navigation buttons (popstate)
+  useEffect(() => {
+    const handlePopState = () => {
+      if (!isAuthenticated) {
+        if (window.location.pathname !== '/login') {
+          window.history.replaceState(null, '', '/login');
+        }
+        return;
+      }
+
+      const requestedView = getRequestedViewFromPath(window.location.pathname);
+      if (!requestedView) {
+        const fallbackView = userRole === 'admin' ? 'admin-dashboard' : 'staff-dashboard';
+        setCurrentView(fallbackView);
+        window.history.replaceState(null, '', getPathFromView(fallbackView));
+      } else if (userRole === 'staff' && adminRestrictedViews.includes(requestedView)) {
+        toast.warning("Access Restricted: Staff members do not have permission to view Admin modules.", "Permission Denied");
+        setCurrentView('staff-dashboard');
+        window.history.replaceState(null, '', '/staff');
+      } else {
+        setCurrentView(requestedView);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isAuthenticated, userRole]);
+
+  // Handle protected navigation with role checks & URL updates
+  const handleNavigate = (requestedView) => {
+    if (!isAuthenticated) return;
+
+    if (userRole === 'staff' && adminRestrictedViews.includes(requestedView)) {
+      toast.warning("Access Restricted: Staff members do not have permission to view Admin modules.", "Permission Denied");
+      setCurrentView('staff-dashboard');
+      window.history.pushState(null, '', '/staff');
+      setIsMobileOpen(false);
       return;
     }
 
     setCurrentView(requestedView);
+    window.history.pushState(null, '', getPathFromView(requestedView));
     setIsMobileOpen(false);
   };
 

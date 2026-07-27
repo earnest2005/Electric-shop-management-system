@@ -103,6 +103,11 @@ export function AuthProvider({ children }) {
     sessionStorage.removeItem('volt_pos_role');
     sessionStorage.removeItem('volt_pos_user');
     localStorage.removeItem('volt_pos_user');
+    try {
+      if (window.location.pathname !== '/login') {
+        window.history.replaceState(null, '', '/login');
+      }
+    } catch (e) {}
   };
 
   const changePassword = async (currentPasswordInput, newPasswordInput) => {
