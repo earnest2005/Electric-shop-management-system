@@ -4,18 +4,8 @@ import { getShopDetails, saveShopDetails, DEFAULT_SHOP_DETAILS } from '../servic
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const savedUser = sessionStorage.getItem('volt_pos_user') || localStorage.getItem('volt_pos_user');
-      if (savedUser) return JSON.parse(savedUser);
-    } catch (e) {}
-    const isAuth = sessionStorage.getItem('volt_pos_auth') === 'true' || localStorage.getItem('volt_pos_auth') === 'true';
-    const role = sessionStorage.getItem('volt_pos_role') || localStorage.getItem('volt_pos_role');
-    if (isAuth && role) {
-      return { username: role, role };
-    }
-    return null;
-  });
+  // Always initialize user state to null on application startup so the Login page is always displayed first
+  const [user, setUser] = useState(null);
 
   const isAuthenticated = !!user;
   const userRole = user ? user.role : null;
@@ -99,10 +89,10 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     setUser(null);
-    sessionStorage.removeItem('volt_pos_auth');
-    sessionStorage.removeItem('volt_pos_role');
-    sessionStorage.removeItem('volt_pos_user');
-    localStorage.removeItem('volt_pos_user');
+    try {
+      sessionStorage.clear();
+      localStorage.clear();
+    } catch (e) {}
     try {
       if (window.location.pathname !== '/login') {
         window.history.replaceState(null, '', '/login');

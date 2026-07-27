@@ -107,7 +107,7 @@ function MainAppContent() {
   const { isAuthenticated, userRole } = useAuth();
   const { toast } = useAlert();
 
-  // Initial view based on auth state, requested URL path, and userRole
+  // Always start at 'login' when unauthenticated
   const [currentView, setCurrentView] = useState(() => {
     if (!isAuthenticated) return 'login';
     const pathView = getRequestedViewFromPath(window.location.pathname);
@@ -127,9 +127,10 @@ function MainAppContent() {
   const [activeResumedDraft, setActiveResumedDraft] = useState(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // Sync auth state, URL, and route protection
+  // Enforce Login landing and route protection
   useEffect(() => {
     if (!isAuthenticated) {
+      setCurrentView('login');
       if (window.location.pathname !== '/login') {
         window.history.replaceState(null, '', '/login');
       }
