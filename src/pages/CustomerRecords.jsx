@@ -429,8 +429,8 @@ export default function CustomerRecords() {
                         onClick={() => setSelectedInvoice(b)}
                         className="px-3 py-1 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-extrabold rounded-lg text-xs transition flex items-center space-x-1"
                       >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>Reprint Invoice</span>
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View Invoice</span>
                       </button>
                     </div>
                   </div>

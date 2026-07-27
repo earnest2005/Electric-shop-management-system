@@ -176,7 +176,7 @@ export default function ReceiptModal({ invoice, onClose }) {
             )}
             <div className="flex justify-between text-[11px] text-slate-500 pt-1">
               <span>Payment Mode: <strong className="text-blue-600 font-mono">{invoice.paymentMethod || 'CASH'}</strong></span>
-              <span className="text-emerald-600 font-bold">STATUS: CONFIRMED</span>
+              <span>Billed By: <strong className="text-slate-900 font-mono">{invoice.staffName || invoice.staff || 'Staff'}</strong></span>
             </div>
           </div>
 

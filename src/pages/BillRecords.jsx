@@ -216,8 +216,8 @@ export default function BillRecords() {
                         onClick={() => setSelectedInvoice(bill)}
                         className="px-3 py-1.5 bg-[#1F2937] hover:bg-[#374151] text-[#14B8A6] border border-[#374151] rounded-xl transition text-[11px] font-bold inline-flex items-center space-x-1 min-h-[36px]"
                       >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>Print Invoice</span>
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View Invoice</span>
                       </button>
                     </td>
                   </tr>
@@ -264,8 +264,8 @@ export default function BillRecords() {
                     onClick={() => setSelectedInvoice(bill)}
                     className="px-4 py-2 bg-[#273549] hover:bg-[#374151] text-[#14B8A6] border border-[#374151] rounded-xl transition text-xs font-bold flex items-center space-x-1.5 min-h-[44px]"
                   >
-                    <Printer className="w-4 h-4" />
-                    <span>Print Invoice</span>
+                    <Eye className="w-4 h-4" />
+                    <span>View Invoice</span>
                   </button>
                 </div>
               </div>
