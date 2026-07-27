@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Eye, EyeOff, ShieldCheck, Zap, KeyRound, ArrowRight, AlertCircle } from 'lucide-react';
+import { Lock, Eye, EyeOff, ShieldCheck, Zap, KeyRound, ArrowRight, AlertCircle, Shield, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function LockScreen() {
@@ -47,20 +47,17 @@ export default function LockScreen() {
               </h2>
             </div>
             <p className="text-xs text-slate-400 font-mono mt-1">
-              Terminal Locked • Authentication Required
+              Terminal Locked • Enter Admin or Staff Password
             </p>
           </div>
         </div>
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="block text-xs font-mono text-slate-300 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <KeyRound className="w-3.5 h-3.5 text-amber-400" /> Enter Store Access Password
-              </span>
-              <span className="text-[10px] text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-mono">
-                Default: admin123
+                <KeyRound className="w-3.5 h-3.5 text-amber-400" /> Enter Terminal Password
               </span>
             </label>
 
@@ -73,7 +70,7 @@ export default function LockScreen() {
                   setPassword(e.target.value);
                   if (errorMsg) setErrorMsg('');
                 }}
-                placeholder="Enter password..."
+                placeholder="Enter Admin or Staff Password..."
                 className="w-full glass-input px-4 py-3.5 pr-12 rounded-xl text-sm font-mono tracking-wider focus:ring-2 focus:ring-amber-500/50"
               />
 
@@ -84,6 +81,23 @@ export default function LockScreen() {
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[10px]">
+              <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 flex items-center space-x-1.5">
+                <Shield className="w-3 h-3 text-amber-400 shrink-0" />
+                <div>
+                  <div className="font-bold">ADMIN ROLE</div>
+                  <div className="text-slate-400 text-[9px]">Default: admin123</div>
+                </div>
+              </div>
+              <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-300 flex items-center space-x-1.5">
+                <UserCheck className="w-3 h-3 text-blue-400 shrink-0" />
+                <div>
+                  <div className="font-bold">STAFF ROLE</div>
+                  <div className="text-slate-400 text-[9px]">Default: staff123</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -109,7 +123,7 @@ export default function LockScreen() {
         <div className="pt-2 border-t border-slate-800/80 text-center">
           <div className="text-[11px] text-slate-500 font-mono flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Encrypted Cloud & Offline Authentication Active</span>
+            <span>Dual-Role Authentication System Active</span>
           </div>
         </div>
       </div>

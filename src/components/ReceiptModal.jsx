@@ -3,9 +3,11 @@ import { X, Printer, CheckCircle2, Zap, Phone, MapPin, User, AlertTriangle } fro
 import confetti from 'canvas-confetti';
 import { formatRupees, formatNumberIN } from '../utils/currency';
 import { getShopDetails, DEFAULT_SHOP_DETAILS } from '../services/db';
+import { printReceiptHtml } from '../utils/print';
 
 export default function ReceiptModal({ invoice, onClose }) {
   const [shopInfo, setShopInfo] = useState(DEFAULT_SHOP_DETAILS);
+  const [canClose, setCanClose] = useState(false);
 
   useEffect(() => {
     async function loadShop() {
@@ -13,6 +15,19 @@ export default function ReceiptModal({ invoice, onClose }) {
       if (data) setShopInfo(data);
     }
     loadShop();
+
+    // Prevent accidental instant closure (from Enter key press or double click) for 400ms after opening
+    const guardTimer = setTimeout(() => {
+      setCanClose(true);
+    }, 400);
+
+    // Close on Escape key press safely
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
 
     // Trigger Celebration Confetti Papers Burst on Modal Pop-Up
     if (invoice) {
@@ -33,12 +48,36 @@ export default function ReceiptModal({ invoice, onClose }) {
         } catch (e) {}
       }, 100);
     }
-  }, [invoice]);
+
+    return () => {
+      clearTimeout(guardTimer);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [invoice, onClose]);
 
   if (!invoice) return null;
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const receiptElem = document.getElementById('printable-receipt');
+    if (receiptElem) {
+      printReceiptHtml(receiptElem.outerHTML);
+    } else {
+      window.print();
+    }
+  };
+
+  const handleSafeClose = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (canClose) {
+      onClose();
+    }
   };
 
   const custName = invoice.customer?.name || invoice.customerName || 'Walk-in Customer';
@@ -54,8 +93,14 @@ export default function ReceiptModal({ invoice, onClose }) {
   const items = invoice.items || [];
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-dark-900 border border-slate-700/80 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+    <div 
+      className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200 print:bg-transparent print:p-0 print:static print:block"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div 
+        className="bg-dark-900 border border-slate-700/80 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh] print:max-h-none print:overflow-visible print:border-none print:shadow-none print:bg-white print:w-full print:block"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Top Action Bar (Hidden in Print) */}
         <div className="p-4 border-b border-slate-800 bg-dark-800 flex items-center justify-between print:hidden">
           <div className="flex items-center space-x-2">
@@ -76,7 +121,7 @@ export default function ReceiptModal({ invoice, onClose }) {
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleSafeClose}
               className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
             >
               <X className="w-5 h-5" />
@@ -85,7 +130,7 @@ export default function ReceiptModal({ invoice, onClose }) {
         </div>
 
         {/* Printable Receipt Body */}
-        <div className="p-6 overflow-y-auto font-sans bg-dark-900 text-slate-100" id="printable-receipt">
+        <div className="p-6 overflow-y-auto font-sans bg-dark-900 text-slate-100 print:p-0 print:overflow-visible print:bg-white print:text-black" id="printable-receipt">
           {/* Shop Brand Header */}
           <div className="text-center pb-4 border-b border-dashed border-slate-700 space-y-1">
             <div className="flex items-center justify-center space-x-2 text-amber-400 font-extrabold text-xl">
@@ -151,7 +196,9 @@ export default function ReceiptModal({ invoice, onClose }) {
                   <td className="py-2 pr-2 font-sans font-medium text-white">{item.productName}</td>
                   <td className="text-center py-2 text-amber-400 font-bold">{item.qty}</td>
                   <td className="text-right py-2">₹{formatNumberIN(item.unitPrice || item.basePrice || 0)}</td>
-                  <td className="text-right py-2 font-bold text-white">₹{formatNumberIN(item.total)}</td>
+                  <td className="text-right py-2 font-bold text-white">
+                    ₹{formatNumberIN(item.total || ((item.unitPrice || item.basePrice || 0) * item.qty))}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -213,7 +260,7 @@ export default function ReceiptModal({ invoice, onClose }) {
         <div className="p-4 border-t border-slate-800 bg-dark-800 flex justify-end space-x-2 print:hidden">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleSafeClose}
             className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl shadow-lg transition"
           >
             CLOSE & START NEW SALE

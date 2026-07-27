@@ -7,21 +7,29 @@ export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return sessionStorage.getItem('volt_pos_auth') === 'true';
   });
-  const [activePassword, setActivePassword] = useState(DEFAULT_SHOP_DETAILS.appPassword);
 
-  // Sync latest password from shop details (local & cloud)
+  const [userRole, setUserRole] = useState(() => {
+    return sessionStorage.getItem('volt_pos_role') || null;
+  });
+
+  const [activePassword, setActivePassword] = useState(DEFAULT_SHOP_DETAILS.appPassword);
+  const [activeStaffPassword, setActiveStaffPassword] = useState(DEFAULT_SHOP_DETAILS.staffPassword || 'staff123');
+
+  // Sync latest passwords from shop details (local & cloud)
   useEffect(() => {
-    async function loadPassword() {
+    async function loadPasswords() {
       const details = await getShopDetails();
-      if (details && details.appPassword) {
-        setActivePassword(details.appPassword);
+      if (details) {
+        if (details.appPassword) setActivePassword(details.appPassword);
+        if (details.staffPassword) setActiveStaffPassword(details.staffPassword);
       }
     }
-    loadPassword();
+    loadPasswords();
 
     const handleShopUpdate = (e) => {
-      if (e.detail && e.detail.appPassword) {
-        setActivePassword(e.detail.appPassword);
+      if (e.detail) {
+        if (e.detail.appPassword) setActivePassword(e.detail.appPassword);
+        if (e.detail.staffPassword) setActiveStaffPassword(e.detail.staffPassword);
       }
     };
 
@@ -30,22 +38,38 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = (passwordInput) => {
-    if (passwordInput === activePassword) {
+    const trimmed = (passwordInput || '').trim();
+    if (trimmed === activePassword) {
       setIsAuthenticated(true);
+      setUserRole('admin');
       sessionStorage.setItem('volt_pos_auth', 'true');
-      return { success: true };
+      sessionStorage.setItem('volt_pos_role', 'admin');
+      return { success: true, role: 'admin' };
     }
-    return { success: false, error: 'Invalid password. Default is admin123' };
+    if (trimmed === activeStaffPassword) {
+      setIsAuthenticated(true);
+      setUserRole('staff');
+      sessionStorage.setItem('volt_pos_auth', 'true');
+      sessionStorage.setItem('volt_pos_role', 'staff');
+      return { success: true, role: 'staff' };
+    }
+
+    return { 
+      success: false, 
+      error: 'Invalid password. (Admin default: admin123 | Staff default: staff123)' 
+    };
   };
 
   const logout = () => {
     setIsAuthenticated(false);
+    setUserRole(null);
     sessionStorage.removeItem('volt_pos_auth');
+    sessionStorage.removeItem('volt_pos_role');
   };
 
   const changePassword = async (currentPasswordInput, newPasswordInput) => {
     if (currentPasswordInput !== activePassword) {
-      throw new Error("Current password is incorrect.");
+      throw new Error("Current Admin password is incorrect.");
     }
     if (!newPasswordInput || newPasswordInput.trim().length < 3) {
       throw new Error("New password must be at least 3 characters long.");
@@ -63,8 +87,37 @@ export function AuthProvider({ children }) {
     return true;
   };
 
+  const changeStaffPassword = async (currentAdminPasswordInput, newStaffPasswordInput) => {
+    if (currentAdminPasswordInput !== activePassword) {
+      throw new Error("Current Admin password is required to change staff password.");
+    }
+    if (!newStaffPasswordInput || newStaffPasswordInput.trim().length < 3) {
+      throw new Error("New staff password must be at least 3 characters long.");
+    }
+
+    const currentDetails = (await getShopDetails()) || DEFAULT_SHOP_DETAILS;
+    const updatedDetails = {
+      ...currentDetails,
+      staffPassword: newStaffPasswordInput.trim(),
+      updatedAt: new Date().toISOString()
+    };
+
+    await saveShopDetails(updatedDetails);
+    setActiveStaffPassword(newStaffPasswordInput.trim());
+    return true;
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout, changePassword, activePassword }}>
+    <AuthContext.Provider value={{ 
+      isAuthenticated, 
+      userRole, 
+      login, 
+      logout, 
+      changePassword, 
+      changeStaffPassword, 
+      activePassword, 
+      activeStaffPassword 
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,7 +4,8 @@ import {
   getDocs, 
   getDoc, 
   setDoc, 
-  deleteDoc 
+  deleteDoc,
+  writeBatch 
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
@@ -141,7 +142,8 @@ export const DEFAULT_SHOP_DETAILS = {
   gstin: "29ABCDE1234F1Z5",
   invoiceFooterNote: "Thank you for shopping at Volt Electricals! Warranty valid against invoice.",
   defaultTaxPercent: 18,
-  appPassword: "admin123"
+  appPassword: "admin123",
+  staffPassword: "staff123"
 };
 
 export const SEED_CUSTOMERS = [];
@@ -283,24 +285,52 @@ export async function createInvoice(sale) {
   const rawPhone = (sale.customer && sale.customer.phone) ? sale.customer.phone.replace(/\D/g, '') : '';
   const cleanPhone = rawPhone || `CUST-${Date.now()}`;
   const timestamp = new Date().toISOString();
-  const billNumber = `INV-${Date.now().toString().slice(-6)}`;
+  const billNumber = sale.billNumber || `INV-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+
+  // Find existing customer in local cache to preserve prior totalPurchases and totalDue
+  const customersCache = getLocalCache('customers', []);
+  const existingCust = customersCache.find(c => c.phone.replace(/\D/g, '') === cleanPhone);
+
+  const prevTotalPurchases = Number(existingCust?.totalPurchases || sale.customer?.totalPurchases || 0);
+  const prevTotalDue = Number(existingCust?.totalDue || sale.customer?.totalDue || 0);
+
+  const newTotalPurchases = prevTotalPurchases + Number(sale.totalAmount || 0);
+  const newTotalDue = prevTotalDue + Number(sale.dueAmount || 0);
+
+  const customerRecord = {
+    id: cleanPhone,
+    phone: cleanPhone,
+    name: (sale.customer && sale.customer.name) ? sale.customer.name : 'Walk-in Customer',
+    address: (sale.customer && sale.customer.address) ? sale.customer.address : 'Local Store',
+    totalPurchases: newTotalPurchases,
+    totalDue: newTotalDue,
+    lastPurchaseAt: timestamp
+  };
+
+  const formattedItems = (sale.items || []).map(item => {
+    const unitPrice = Number(item.unitPrice ?? item.basePrice ?? 0);
+    const qty = Number(item.qty || 1);
+    const total = Number(item.total ?? (unitPrice * qty));
+    return {
+      barcode: item.barcode || 'UNKNOWN',
+      productName: item.productName || 'Product',
+      qty,
+      unitPrice,
+      basePrice: unitPrice,
+      total,
+      taxPercent: Number(item.taxPercent || 18)
+    };
+  });
 
   const purchaseRecord = {
     id: billNumber,
     billNumber,
     customer: {
       phone: cleanPhone,
-      name: (sale.customer && sale.customer.name) ? sale.customer.name : 'Walk-in Customer',
-      address: (sale.customer && sale.customer.address) ? sale.customer.address : 'Local Store'
+      name: customerRecord.name,
+      address: customerRecord.address
     },
-    items: (sale.items || []).map(item => ({
-      barcode: item.barcode || 'UNKNOWN',
-      productName: item.productName || 'Product',
-      qty: Number(item.qty || 1),
-      unitPrice: Number(item.unitPrice || 0),
-      total: Number((item.unitPrice || 0) * (item.qty || 1)),
-      taxPercent: Number(item.taxPercent || 18)
-    })),
+    items: formattedItems,
     subtotal: Number(sale.subtotal || 0),
     taxAmount: Number(sale.taxAmount ?? sale.tax ?? 0),
     discountAmount: Number(sale.discountAmount ?? sale.discounts ?? 0),
@@ -311,63 +341,56 @@ export async function createInvoice(sale) {
     timestamp
   };
 
-  // 1. Instant local cache update (0ms UI response)
-  const purchases = getLocalCache('purchases', []);
-  purchases.unshift(purchaseRecord);
-  setLocalCache('purchases', purchases);
+  const productsCache = getLocalCache('products', SEED_PRODUCTS);
+  const updatedProductsCache = [...productsCache];
 
-  const products = getLocalCache('products', SEED_PRODUCTS);
-  (sale.items || []).forEach(item => {
-    const pIdx = products.findIndex(p => p.barcode === item.barcode);
-    if (pIdx >= 0) products[pIdx].currentStock = Math.max(0, products[pIdx].currentStock - item.qty);
-  });
-  setLocalCache('products', products);
+  // Prepare Atomic Firestore Batch Write
+  try {
+    const batch = writeBatch(db);
 
-  const customers = getLocalCache('customers', []);
-  const cIdx = customers.findIndex(c => c.phone === cleanPhone);
-  if (cIdx >= 0) {
-    customers[cIdx].totalPurchases = (customers[cIdx].totalPurchases || 0) + purchaseRecord.totalAmount;
-    customers[cIdx].totalDue = (customers[cIdx].totalDue || 0) + purchaseRecord.dueAmount;
-    customers[cIdx].lastPurchaseAt = timestamp;
-    customers[cIdx].name = purchaseRecord.customer.name;
-    if (purchaseRecord.customer.address) customers[cIdx].address = purchaseRecord.customer.address;
-  } else {
-    customers.push({
-      id: cleanPhone,
-      phone: cleanPhone,
-      name: purchaseRecord.customer.name,
-      address: purchaseRecord.customer.address,
-      totalPurchases: purchaseRecord.totalAmount,
-      totalDue: purchaseRecord.dueAmount,
-      lastPurchaseAt: timestamp
-    });
-  }
-  setLocalCache('customers', customers);
+    // 1. Save purchase invoice document
+    batch.set(doc(db, 'purchases', billNumber), purchaseRecord);
 
-  // 2. Non-blocking Background Writes to Cloud Firestore
-  setDoc(doc(db, 'purchases', billNumber), purchaseRecord)
-    .then(() => console.log("🔥 Live Firestore purchase saved:", billNumber))
-    .catch(err => console.error("❌ Firestore purchase save error:", err));
-  
-  setDoc(doc(db, 'customers', cleanPhone), {
-    id: cleanPhone,
-    phone: cleanPhone,
-    name: purchaseRecord.customer.name,
-    address: purchaseRecord.customer.address,
-    totalPurchases: (sale.customer?.totalPurchases || 0) + purchaseRecord.totalAmount,
-    totalDue: (sale.customer?.totalDue || 0) + purchaseRecord.dueAmount,
-    lastPurchaseAt: timestamp
-  }, { merge: true })
-    .then(() => console.log("🔥 Live Firestore customer updated:", cleanPhone))
-    .catch(err => console.error("❌ Firestore customer save error:", err));
+    // 2. Save / Update customer document
+    batch.set(doc(db, 'customers', cleanPhone), customerRecord, { merge: true });
 
-  for (const item of (sale.items || [])) {
-    if (item.barcode) {
-      setDoc(doc(db, 'products', item.barcode), {
-        currentStock: Math.max(0, (item.currentStock || 0) - item.qty)
-      }, { merge: true }).catch(() => {});
+    // 3. Update product inventory stocks
+    for (const item of (sale.items || [])) {
+      if (item.barcode) {
+        const pIdx = updatedProductsCache.findIndex(p => p.barcode === item.barcode);
+        let newStock = 0;
+        if (pIdx >= 0) {
+          newStock = Math.max(0, (updatedProductsCache[pIdx].currentStock || 0) - item.qty);
+          updatedProductsCache[pIdx] = { ...updatedProductsCache[pIdx], currentStock: newStock };
+        } else {
+          newStock = Math.max(0, (item.currentStock || 0) - item.qty);
+        }
+        batch.set(doc(db, 'products', item.barcode), { currentStock: newStock }, { merge: true });
+      }
     }
+
+    // Commit all Firestore operations atomically
+    await batch.commit();
+    console.log("🔥 Firestore Atomic Sale Batch Committed Successfully:", billNumber);
+  } catch (err) {
+    console.warn("⚠️ Firestore write batch failed or offline fallback activated:", err.message);
+    // Proceed with local cache sync if offline/demo mode, but log warning
   }
+
+  // Sync Local Caches
+  const purchasesCache = getLocalCache('purchases', []);
+  purchasesCache.unshift(purchaseRecord);
+  setLocalCache('purchases', purchasesCache);
+
+  setLocalCache('products', updatedProductsCache);
+
+  const cIdx = customersCache.findIndex(c => c.phone.replace(/\D/g, '') === cleanPhone);
+  if (cIdx >= 0) {
+    customersCache[cIdx] = { ...customersCache[cIdx], ...customerRecord };
+  } else {
+    customersCache.unshift(customerRecord);
+  }
+  setLocalCache('customers', customersCache);
 
   return purchaseRecord;
 }

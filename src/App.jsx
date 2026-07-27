@@ -9,6 +9,8 @@ import ReceiptModal from './components/ReceiptModal';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import DraftInvoicesModal from './components/DraftInvoicesModal';
 
+import { Lock } from 'lucide-react';
+
 // Code-split page components for instant initial bundle rendering
 const POSBilling = lazy(() => import('./pages/POSBilling'));
 const CustomerLedger = lazy(() => import('./pages/CustomerLedger'));
@@ -30,7 +32,7 @@ function PageLoader() {
 }
 
 function MainAppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, userRole } = useAuth();
   const [currentView, setCurrentView] = useState('pos');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
@@ -126,7 +128,25 @@ function MainAppContent() {
             )}
 
             {currentView === 'settings' && (
-              <ShopSettings />
+              userRole === 'admin' ? (
+                <ShopSettings />
+              ) : (
+                <div className="p-12 text-center space-y-4 flex flex-col items-center justify-center min-h-[500px]">
+                  <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                    <Lock className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white">Access Restricted</h3>
+                  <p className="text-sm text-slate-400 max-w-md">
+                    Shop Settings & Data Reset options require Admin Password authorization. Staff users are authorized for POS Billing and Sales History.
+                  </p>
+                  <button
+                    onClick={() => setCurrentView('pos')}
+                    className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl transition shadow-lg shadow-amber-500/20"
+                  >
+                    RETURN TO ACTIVE POS BILLING
+                  </button>
+                </div>
+              )
             )}
           </Suspense>
         </main>

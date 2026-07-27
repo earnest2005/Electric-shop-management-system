@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function ShopSettings() {
   const { toast, confirm } = useAlert();
-  const { changePassword } = useAuth();
+  const { changePassword, changeStaffPassword } = useAuth();
   const backupInputRef = useRef(null);
 
   const [shopName, setShopName] = useState(DEFAULT_SHOP_DETAILS.shopName);
@@ -18,11 +18,16 @@ export default function ShopSettings() {
   const [invoiceFooterNote, setInvoiceFooterNote] = useState(DEFAULT_SHOP_DETAILS.invoiceFooterNote);
   const [defaultTaxPercent, setDefaultTaxPercent] = useState(DEFAULT_SHOP_DETAILS.defaultTaxPercent.toString());
 
-  // Password state
+  // Admin Password state
   const [currentPasswordInput, setCurrentPasswordInput] = useState('');
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [isChangingPass, setIsChangingPass] = useState(false);
+
+  // Staff Password state
+  const [adminPassForStaff, setAdminPassForStaff] = useState('');
+  const [staffPasswordInput, setStaffPasswordInput] = useState('');
+  const [isChangingStaffPass, setIsChangingStaffPass] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -67,7 +72,7 @@ export default function ShopSettings() {
     setIsChangingPass(true);
     try {
       await changePassword(currentPasswordInput, newPasswordInput);
-      toast.success("Terminal access password changed & synced with Cloud Firestore!", "Password Updated");
+      toast.success("Admin terminal password changed & synced with Cloud Firestore!", "Admin Password Updated");
       setCurrentPasswordInput('');
       setNewPasswordInput('');
       setConfirmPasswordInput('');
@@ -75,6 +80,30 @@ export default function ShopSettings() {
       toast.error(err.message, "Password Error");
     } finally {
       setIsChangingPass(false);
+    }
+  };
+
+  const handleChangeStaffPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!adminPassForStaff) {
+      toast.error("Please enter your current Admin password to authorize changing staff password.", "Validation Error");
+      return;
+    }
+    if (!staffPasswordInput || staffPasswordInput.length < 3) {
+      toast.error("New staff password must be at least 3 characters long.", "Validation Error");
+      return;
+    }
+
+    setIsChangingStaffPass(true);
+    try {
+      await changeStaffPassword(adminPassForStaff, staffPasswordInput);
+      toast.success("Staff POS password updated & synced with Cloud Firestore!", "Staff Password Updated");
+      setStaffPasswordInput('');
+      setAdminPassForStaff('');
+    } catch (err) {
+      toast.error(err.message, "Password Error");
+    } finally {
+      setIsChangingStaffPass(false);
     }
   };
 
@@ -429,12 +458,76 @@ export default function ShopSettings() {
                 {isChangingPass ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>UPDATING PASSWORD...</span>
+                    <span>UPDATING ADMIN PASSWORD...</span>
                   </>
                 ) : (
                   <>
                     <Lock className="w-4 h-4" />
-                    <span>UPDATE PASSWORD</span>
+                    <span>UPDATE ADMIN PASSWORD</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4B: Staff / Cashier Access Password Management */}
+        <div className="glass-panel p-6 rounded-2xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center space-x-2 text-blue-400 font-semibold text-sm">
+              <KeyRound className="w-5 h-5" />
+              <span>Staff / Cashier Access Password</span>
+            </div>
+            <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-mono">
+              POS BILLING ACCESS ONLY
+            </span>
+          </div>
+
+          <div className="text-xs space-y-3 font-sans">
+            <p className="text-slate-300 font-mono text-[11px]">
+              Set or update the password given to counter staff. Staff users can perform POS billing and print receipts, but cannot modify store settings, delete customer records, or access system resets.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">Current Admin Password (Authorization)*</label>
+                <input
+                  type="password"
+                  value={adminPassForStaff}
+                  onChange={e => setAdminPassForStaff(e.target.value)}
+                  placeholder="Enter your Admin password..."
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">New Staff Password*</label>
+                <input
+                  type="password"
+                  value={staffPasswordInput}
+                  onChange={e => setStaffPasswordInput(e.target.value)}
+                  placeholder="Enter new staff password (e.g. staff123)..."
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono text-blue-300"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={handleChangeStaffPasswordSubmit}
+                disabled={isChangingStaffPass}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center space-x-1.5 disabled:opacity-50"
+              >
+                {isChangingStaffPass ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>UPDATING STAFF PASSWORD...</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>UPDATE STAFF PASSWORD</span>
                   </>
                 )}
               </button>

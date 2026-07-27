@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 export default function Navbar({ currentView, onOpenShortcuts, onOpenDrafts, draftCount = 0 }) {
-  const { logout } = useAuth();
+  const { logout, userRole } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [totalDue, setTotalDue] = useState(0);
@@ -139,6 +139,17 @@ export default function Navbar({ currentView, onOpenShortcuts, onOpenDrafts, dra
           {isOnline ? <Wifi className="w-4 h-4 text-emerald-400" /> : <WifiOff className="w-4 h-4 text-amber-400" />}
           <span>{isOnline ? 'Live Cloud' : 'Offline'}</span>
         </div>
+
+        {/* Role Badge */}
+        {userRole && (
+          <span className={`text-[10px] px-2 py-1 rounded-lg border font-mono font-bold flex items-center gap-1 ${
+            userRole === 'admin' 
+              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' 
+              : 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+          }`}>
+            {userRole === 'admin' ? '👑 ADMIN' : '👤 STAFF'}
+          </span>
+        )}
 
         {/* Lock POS Button */}
         <button

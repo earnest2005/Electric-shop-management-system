@@ -41,6 +41,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
 
   const barcodeInputRef = useRef(null);
   const customerPhoneRef = useRef(null);
+  const isSubmittingRef = useRef(false);
 
   // If a draft bill was requested to resume from parent App
   useEffect(() => {
@@ -161,6 +162,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
           {
             barcode: product.barcode,
             productName: product.productName,
+            unitPrice: product.basePrice, // in Paise
             basePrice: product.basePrice, // in Paise
             taxPercent: product.taxPercent || 18,
             currentStock: product.currentStock,
@@ -170,6 +172,10 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
         ];
       }
     });
+
+    setTimeout(() => {
+      if (barcodeInputRef.current) barcodeInputRef.current.focus();
+    }, 50);
   };
 
   const updateCartQty = (barcode, delta) => {
@@ -243,9 +249,11 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
 
   // Financial calculations in Paise
   const subtotalPaise = cart.reduce((acc, item) => acc + item.total, 0);
-  const taxPaise = Math.round(subtotalPaise * 0.18); // 18% GST inclusive calculation
   const discountPaise = rupeesToPaise(discountRupees);
-  const totalAmountPaise = Math.max(0, subtotalPaise - discountPaise);
+  const taxablePaise = Math.max(0, subtotalPaise - discountPaise);
+  // 18% GST inclusive calculation: Tax = Amount * 18 / 118
+  const taxPaise = Math.round(taxablePaise * 18 / 118);
+  const totalAmountPaise = taxablePaise;
 
   // Payment calculation logic: leave paidRupees blank for user input
   useEffect(() => {
@@ -261,7 +269,12 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   const dueAmountPaise = Math.max(0, totalAmountPaise - paidAmountPaise);
 
   // Process Checkout
-  const handleCheckout = async () => {
+  const handleCheckout = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (document.activeElement) document.activeElement.blur();
+
+    if (isSubmittingRef.current) return;
+
     if (cart.length === 0) {
       toast.warning("Cart is empty! Add products first.", "Empty Cart");
       return;
@@ -275,6 +288,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -323,6 +337,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
       console.error("Sale commit failed:", err);
       toast.error("Failed to complete transaction: " + err.message, "Transaction Error");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

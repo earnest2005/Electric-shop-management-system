@@ -124,36 +124,73 @@ html.light ::-webkit-scrollbar-thumb {
   background: #374151;
 }
 
-/* Print Receipt Thermal Styles */
+/* Print Receipt Thermal & Standard Page Styles */
 @media print {
   @page {
     margin: 0;
-    size: 80mm auto;
+    size: auto;
   }
 
-  body {
+  html, body {
     background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
     color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
   }
 
+  /* Hide non-printable content by default */
   body * {
     visibility: hidden !important;
   }
 
+  /* Reset modal overlay dark backdrops during print */
+  .fixed.inset-0,
+  .backdrop-blur-md {
+    background: transparent !important;
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Force printable receipt element and all its descendant nodes to be visible */
   #printable-receipt,
   #printable-receipt * {
     visibility: visible !important;
   }
 
+  /* Reset layout constraints on all parent containers wrapping #printable-receipt */
+  body:has(#printable-receipt),
+  div:has(#printable-receipt) {
+    position: static !important;
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    animation: none !important;
+  }
+
+  /* Position printable receipt fixed at the top-left of the physical page */
   #printable-receipt {
-    position: absolute !important;
+    position: fixed !important;
     left: 0 !important;
     top: 0 !important;
     width: 80mm !important;
-    max-width: 80mm !important;
-    padding: 8mm 4mm !important;
+    max-width: 100% !important;
+    padding: 6mm 4mm !important;
     margin: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
@@ -162,19 +199,26 @@ html.light ::-webkit-scrollbar-thumb {
     line-height: 1.3 !important;
     box-shadow: none !important;
     border: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    z-index: 9999999 !important;
   }
 
+  /* Force high-contrast black ink formatting for thermal & standard paper */
   #printable-receipt * {
     color: #000000 !important;
     background: transparent !important;
     border-color: #000000 !important;
     box-shadow: none !important;
     text-shadow: none !important;
+    opacity: 1 !important;
   }
 
   #printable-receipt svg {
     stroke: #000000 !important;
     color: #000000 !important;
+    fill: none !important;
   }
 
   #printable-receipt table {
@@ -192,5 +236,11 @@ html.light ::-webkit-scrollbar-thumb {
   #printable-receipt .border-dashed {
     border-style: dashed !important;
     border-color: #000000 !important;
+  }
+
+  /* Hide confetti canvas during print */
+  canvas {
+    display: none !important;
+    visibility: hidden !important;
   }
 }
