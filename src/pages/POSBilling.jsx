@@ -17,9 +17,12 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   const [products, setProducts] = useState([]);
   const [activeOffers, setActiveOffers] = useState([]);
   const [selectedOfferId, setSelectedOfferId] = useState('');
+  
+  // Product Search & Autocomplete State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [barcodeInput, setBarcodeInput] = useState('');
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   
   // Cart state
   const [cart, setCart] = useState([]);
@@ -43,9 +46,16 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   const [recentPurchases, setRecentPurchases] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const barcodeInputRef = useRef(null);
+  const productSearchRef = useRef(null);
   const customerPhoneRef = useRef(null);
   const isSubmittingRef = useRef(false);
+
+  // Focus product search on initial load
+  useEffect(() => {
+    if (productSearchRef.current) {
+      productSearchRef.current.focus();
+    }
+  }, []);
 
   // If a draft bill was requested to resume from parent App
   useEffect(() => {
@@ -61,7 +71,10 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   // Bind Counter Hotkeys
   useKeyboardShortcuts({
     onF2: () => {
-      if (barcodeInputRef.current) barcodeInputRef.current.focus();
+      if (productSearchRef.current) {
+        productSearchRef.current.focus();
+        setIsSearchOpen(true);
+      }
     },
     onF4: () => {
       if (customerPhoneRef.current) customerPhoneRef.current.focus();
@@ -76,6 +89,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     },
     onEsc: () => {
       setShowCustomerSuggestions(false);
+      setIsSearchOpen(false);
     }
   });
 
@@ -97,21 +111,100 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     return () => window.removeEventListener('volt_db_updated', loadData);
   }, []);
 
-  // Handle Barcode Scan / Enter
-  const handleBarcodeSubmit = (e) => {
-    e.preventDefault();
-    if (!barcodeInput.trim()) return;
-    
-    const found = products.find(
-      p => p.barcode === barcodeInput.trim() || p.id === barcodeInput.trim()
-    );
+  // Filtered matching products for search autocomplete dropdown
+  const searchTrimmed = searchQuery.trim();
+  const searchLower = searchTrimmed.toLowerCase();
 
-    if (found) {
-      addToCart(found);
-      setBarcodeInput('');
-    } else {
-      toast.error(`No product found with Barcode: ${barcodeInput}`, "Item Not Found");
+  const matchingProducts = React.useMemo(() => {
+    if (!searchLower) return [];
+    return products.filter(p => {
+      const pName = (p.productName || '').toLowerCase();
+      const pBrand = (p.brand || '').toLowerCase();
+      const pCode = (p.productCode || p.barcode || '').toLowerCase();
+      const pBarcode = (p.barcode || '').toLowerCase();
+      const pCat = (p.category || '').toLowerCase();
+
+      const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
+      const matchSearch = 
+        pName.includes(searchLower) ||
+        pBrand.includes(searchLower) ||
+        pCode.includes(searchLower) ||
+        pBarcode.includes(searchLower) ||
+        pCat.includes(searchLower);
+
+      return matchCat && matchSearch;
+    }).slice(0, 15);
+  }, [products, searchLower, selectedCategory]);
+
+  useEffect(() => {
+    setHighlightedIndex(0);
+    if (searchTrimmed.length > 0) {
+      setIsSearchOpen(true);
     }
+  }, [searchQuery]);
+
+  const handleSelectProduct = (product) => {
+    if (!product) return;
+    addToCart(product);
+    setSearchQuery('');
+    setIsSearchOpen(false);
+    setHighlightedIndex(0);
+    setTimeout(() => {
+      if (productSearchRef.current) productSearchRef.current.focus();
+    }, 30);
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!isSearchOpen) setIsSearchOpen(true);
+      setHighlightedIndex(prev => (prev < matchingProducts.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!isSearchOpen) setIsSearchOpen(true);
+      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : Math.max(0, matchingProducts.length - 1)));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (matchingProducts.length > 0) {
+        const selected = matchingProducts[highlightedIndex] || matchingProducts[0];
+        if (selected) {
+          handleSelectProduct(selected);
+        }
+      } else if (searchTrimmed) {
+        const exactMatch = products.find(p => 
+          (p.barcode && p.barcode.toLowerCase() === searchLower) ||
+          (p.productCode && p.productCode.toLowerCase() === searchLower) ||
+          (p.id && p.id.toLowerCase() === searchLower)
+        );
+        if (exactMatch) {
+          handleSelectProduct(exactMatch);
+        } else {
+          toast.error(`No product found matching "${searchTrimmed}"`, "Item Not Found");
+        }
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsSearchOpen(false);
+      setSearchQuery('');
+    }
+  };
+
+  // Text Highlighting Helper
+  const renderHighlightedText = (text, query) => {
+    if (!text) return '';
+    if (!query || !query.trim()) return text;
+    const q = query.trim();
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+    return parts.map((part, i) =>
+      part.toLowerCase() === q.toLowerCase() ? (
+        <mark key={i} className="bg-teal-500/30 text-teal-200 font-extrabold px-0.5 rounded">
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
   };
 
   // Customer phone live auto-complete lookup
@@ -180,7 +273,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     });
 
     setTimeout(() => {
-      if (barcodeInputRef.current) barcodeInputRef.current.focus();
+      if (productSearchRef.current) productSearchRef.current.focus();
     }, 50);
   };
 
@@ -365,64 +458,139 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 selection:bg-teal-500 selection:text-white">
-      {/* Top Header Barcode Scanner Input */}
+      {/* Top Header POS Bar */}
       <div className="glass-panel p-3.5 sm:p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4 border border-[#374151] bg-[#273549] shadow-sm">
         <div className="flex items-center space-x-3 w-full md:w-auto">
           <div className="p-2.5 bg-teal-500/10 rounded-xl border border-teal-500/30 text-[#14B8A6] shrink-0">
-            <Barcode className="w-6 h-6 animate-pulse" />
+            <Zap className="w-6 h-6 animate-pulse" />
           </div>
           <div>
-            <h2 className="font-bold text-[#F3F4F6] text-base sm:text-lg font-sans">Active POS Checkout Engine</h2>
-            <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-mono">Scan barcode or search catalog (F2 for Focus)</p>
+            <h2 className="font-bold text-[#F3F4F6] text-base sm:text-lg font-sans">Active POS Billing Console</h2>
+            <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-mono">Real-time Inventory Search & Fast Keyboard Billing (F2 to Search)</p>
           </div>
         </div>
 
-        <form onSubmit={handleBarcodeSubmit} className="flex items-center space-x-2 w-full md:w-auto">
-          <div className="relative w-full md:w-72">
-            <Barcode className="w-5 h-5 text-[#14B8A6] absolute left-3 top-3.5" />
-            <input
-              ref={barcodeInputRef}
-              type="text"
-              value={barcodeInput}
-              onChange={e => setBarcodeInput(e.target.value)}
-              placeholder="Scan Barcode / Code (F2)..."
-              className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-xs sm:text-sm font-mono font-bold min-h-[48px] border-[#374151] focus:border-[#14B8A6]"
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-4 py-2.5 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-bold text-xs rounded-xl transition shrink-0 min-h-[48px] flex items-center justify-center shadow-sm"
-          >
-            Add Item
-          </button>
-        </form>
+        {/* Counter Keyboard Hotkey Reference Pills */}
+        <div className="flex items-center space-x-2 text-[11px] font-mono">
+          <span className="bg-[#1F2937] text-teal-300 border border-[#374151] px-2.5 py-1 rounded-lg">
+            <strong className="text-[#14B8A6]">F2:</strong> Search
+          </span>
+          <span className="bg-[#1F2937] text-teal-300 border border-[#374151] px-2.5 py-1 rounded-lg">
+            <strong className="text-[#14B8A6]">F4:</strong> Customer
+          </span>
+          <span className="bg-[#1F2937] text-teal-300 border border-[#374151] px-2.5 py-1 rounded-lg">
+            <strong className="text-[#14B8A6]">F8:</strong> Hold Bill
+          </span>
+        </div>
       </div>
 
-      {/* Main Grid: Left Catalog, Right Billing Cart */}
+      {/* Main Grid: Left Search & Inventory Catalog, Right Billing Cart */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
         
-        {/* LEFT COLUMN: Product Catalog (7 Cols on desktop/tablet, stacked on mobile) */}
+        {/* LEFT COLUMN: Product Search & Autocomplete (7 Cols on desktop/tablet, stacked on mobile) */}
         <div className="lg:col-span-7 space-y-4">
-          {/* Search & Category Filter */}
-          <div className="space-y-3">
+          
+          {/* Master Searchable Product Input with Live Overlay Dropdown */}
+          <div className="space-y-3 relative">
             <div className="relative">
+              <Search className="w-5 h-5 text-[#14B8A6] absolute left-3.5 top-3.5 z-10" />
               <input
+                ref={productSearchRef}
                 type="text"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search products by name, brand, or code..."
-                className="w-full glass-input pl-10 pr-4 py-3 rounded-xl text-xs sm:text-sm min-h-[48px] border-[#374151] focus:border-[#14B8A6]"
+                onChange={e => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search by Product Name, Code, Barcode, or Brand (F2)..."
+                className="w-full glass-input pl-11 pr-10 py-3 rounded-2xl text-sm font-mono font-bold min-h-[50px] border-[#374151] focus:border-[#14B8A6] shadow-md text-[#F3F4F6]"
               />
-              <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-3.5" />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setIsSearchOpen(false);
+                    if (productSearchRef.current) productSearchRef.current.focus();
+                  }}
+                  className="absolute right-3.5 top-3.5 text-[#9CA3AF] hover:text-white text-sm font-bold z-10"
+                >
+                  ✕
+                </button>
+              )}
+
+              {/* Real-time Search Autocomplete Dropdown Overlay */}
+              {isSearchOpen && searchTrimmed.length > 0 && (
+                <div 
+                  className="absolute left-0 right-0 top-full mt-2 bg-[#273549] border border-[#374151] rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[420px] overflow-y-auto divide-y divide-[#374151]"
+                  onMouseDown={e => e.preventDefault()}
+                >
+                  {matchingProducts.length === 0 ? (
+                    <div className="p-6 text-center text-[#9CA3AF] font-mono text-xs space-y-1">
+                      <div className="text-sm font-bold text-[#F3F4F6]">No products found.</div>
+                      <div className="text-[11px] text-[#9CA3AF]">No items match "{searchQuery}". Check code or barcode.</div>
+                    </div>
+                  ) : (
+                    matchingProducts.map((p, idx) => {
+                      const isHighlighted = idx === highlightedIndex;
+                      const isOutOfStock = p.currentStock <= 0;
+                      return (
+                        <div
+                          key={p.barcode || p.id}
+                          onClick={() => handleSelectProduct(p)}
+                          onMouseEnter={() => setHighlightedIndex(idx)}
+                          className={`p-3.5 transition cursor-pointer flex items-center justify-between min-h-[56px] ${
+                            isHighlighted
+                              ? 'bg-teal-500/20 border-l-4 border-l-[#14B8A6] text-white font-bold'
+                              : 'hover:bg-[#1F2937] text-[#F3F4F6]'
+                          } ${isOutOfStock ? 'opacity-50 pointer-events-none' : ''}`}
+                        >
+                          <div className="flex-1 pr-4 space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold text-sm text-[#F3F4F6]">
+                                {renderHighlightedText(p.productName, searchQuery)}
+                              </span>
+                              <span className="text-[10px] font-mono font-bold bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded uppercase">
+                                {renderHighlightedText(p.brand, searchQuery)}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-3 text-[11px] text-[#9CA3AF] font-mono">
+                              <span>Code: {renderHighlightedText(p.productCode || p.barcode, searchQuery)}</span>
+                              {p.category && <span>Category: {p.category}</span>}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0 space-y-0.5">
+                            <div className="font-extrabold text-[#14B8A6] font-mono text-base">
+                              {formatRupees(p.basePrice)}
+                            </div>
+                            <div className="text-[11px] font-mono">
+                              {isOutOfStock ? (
+                                <span className="text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">Out of Stock</span>
+                              ) : (
+                                <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                  Stock: {p.currentStock}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Category Pills */}
-            <div className="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-none touch-pan-x">
+            {/* Category Filter Pills */}
+            <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
               {categories.map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition min-h-[40px] shrink-0 ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition min-h-[38px] shrink-0 ${
                     selectedCategory === cat
                       ? 'bg-[#14B8A6] text-white shadow-sm font-bold'
                       : 'bg-[#273549] text-[#9CA3AF] hover:text-[#F3F4F6] border border-[#374151] hover:border-[#14B8A6]/40'
@@ -434,45 +602,65 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
             </div>
           </div>
 
-          {/* Product Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[580px] overflow-y-auto pr-1">
-            {filteredProducts.map(product => (
-              <div
-                key={product.barcode}
-                onClick={() => addToCart(product)}
-                className={`bg-[#273549] border border-[#374151] p-3.5 rounded-xl cursor-pointer hover:border-[#14B8A6] hover:shadow-md transition group relative flex flex-col justify-between ${
-                  product.currentStock <= 0 ? 'opacity-50 pointer-events-none' : ''
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between text-[11px] text-[#9CA3AF] font-mono mb-1">
-                    <span className="bg-teal-500/10 px-2 py-0.5 rounded text-teal-300 font-semibold border border-teal-500/20">{product.brand}</span>
-                    <span className="text-[#9CA3AF]">#{product.barcode}</span>
-                  </div>
-                  <h4 className="font-semibold text-[#F3F4F6] text-xs leading-snug group-hover:text-[#14B8A6] transition">
-                    {product.productName}
-                  </h4>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between pt-2 border-t border-[#374151]">
-                  <div className="font-bold text-[#14B8A6] font-mono text-sm">
-                    {formatRupees(product.basePrice)}
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                      product.currentStock <= product.minStockAlert 
-                        ? 'bg-red-500/10 text-red-400 border border-red-500/30' 
-                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                    }`}>
-                      Stock: {product.currentStock}
-                    </span>
-                    <div className="w-7 h-7 rounded-lg bg-teal-500/10 text-[#14B8A6] group-hover:bg-[#14B8A6] group-hover:text-white flex items-center justify-center transition">
-                      <Plus className="w-4 h-4" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* Quick Inventory List Table (Replaces old Product Card Grid) */}
+          <div className="bg-[#273549] border border-[#374151] rounded-2xl overflow-hidden shadow-sm">
+            <div className="p-3 bg-[#1F2937] border-b border-[#374151] flex items-center justify-between text-xs font-mono text-[#9CA3AF]">
+              <span>INVENTORY DATABASE CATALOG</span>
+              <span className="text-[#14B8A6] font-bold">
+                {products.filter(p => selectedCategory === 'All' || p.category === selectedCategory).length} Items Available
+              </span>
+            </div>
+            <div className="max-h-[460px] overflow-y-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="bg-[#1F2937]/50 text-[#9CA3AF] font-mono border-b border-[#374151]">
+                    <th className="p-3">PRODUCT & BRAND</th>
+                    <th className="p-3 font-mono">CODE / BARCODE</th>
+                    <th className="p-3 text-right">SELLING PRICE</th>
+                    <th className="p-3 text-center">STOCK</th>
+                    <th className="p-3 text-center">ACTION</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#374151] font-mono text-[#F3F4F6]">
+                  {products
+                    .filter(p => selectedCategory === 'All' || p.category === selectedCategory)
+                    .slice(0, 50)
+                    .map(p => (
+                      <tr key={p.barcode || p.id} className="hover:bg-[#1F2937]/60 transition">
+                        <td className="p-3 font-sans">
+                          <div className="font-bold text-[#F3F4F6] text-xs">{p.productName}</div>
+                          <div className="text-[10px] text-[#14B8A6] font-mono">{p.brand}</div>
+                        </td>
+                        <td className="p-3 text-[#9CA3AF] text-[11px]">
+                          {p.productCode || p.barcode}
+                        </td>
+                        <td className="p-3 text-right font-extrabold text-[#14B8A6]">
+                          {formatRupees(p.basePrice)}
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            p.currentStock <= 0 
+                              ? 'bg-red-500/10 text-red-400 border border-red-500/30' 
+                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                          }`}>
+                            {p.currentStock}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => handleSelectProduct(p)}
+                            disabled={p.currentStock <= 0}
+                            className="px-3 py-1 bg-[#14B8A6] hover:bg-[#0D9488] disabled:opacity-40 text-white font-bold rounded-lg text-xs transition inline-flex items-center space-x-1 min-h-[32px]"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
