@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { AlertProvider } from './context/AlertContext';
+import { AlertProvider, useAlert } from './context/AlertContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import Navbar from './components/Navbar';
@@ -11,20 +11,28 @@ import DraftInvoicesModal from './components/DraftInvoicesModal';
 
 import { Lock } from 'lucide-react';
 
-// Code-split page components for instant initial bundle rendering
+// Admin Portal Pages
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const CustomerRecords = lazy(() => import('./pages/CustomerRecords'));
+const BillRecords = lazy(() => import('./pages/BillRecords'));
+const OfferManagement = lazy(() => import('./pages/OfferManagement'));
+const ReportsAnalytics = lazy(() => import('./pages/ReportsAnalytics'));
+const ShopSettings = lazy(() => import('./pages/ShopSettings'));
+
+// Staff Portal Pages & POS Shared Components
+const StaffDashboard = lazy(() => import('./pages/StaffDashboard'));
 const POSBilling = lazy(() => import('./pages/POSBilling'));
-const CustomerLedger = lazy(() => import('./pages/CustomerLedger'));
 const InventoryMaster = lazy(() => import('./pages/InventoryMaster'));
 const SalesHistory = lazy(() => import('./pages/SalesHistory'));
-const DashboardAnalytics = lazy(() => import('./pages/DashboardAnalytics'));
-const ShopSettings = lazy(() => import('./pages/ShopSettings'));
+const CustomerLedger = lazy(() => import('./pages/CustomerLedger'));
+const ActiveOffers = lazy(() => import('./pages/ActiveOffers'));
 
 // Fallback loader component
 function PageLoader() {
   return (
     <div className="flex items-center justify-center min-h-[600px]">
       <div className="flex flex-col items-center space-y-3">
-        <div className="w-10 h-10 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div>
+        <div className="w-10 h-10 border-4 border-teal-500/20 border-t-teal-500 rounded-full animate-spin"></div>
         <p className="text-xs font-mono text-slate-400">Loading module...</p>
       </div>
     </div>
@@ -33,12 +41,42 @@ function PageLoader() {
 
 function MainAppContent() {
   const { isAuthenticated, userRole } = useAuth();
-  const [currentView, setCurrentView] = useState('pos');
+  const { toast } = useAlert();
+
+  // Initial view based on userRole
+  const [currentView, setCurrentView] = useState(() => {
+    return userRole === 'admin' ? 'admin-dashboard' : 'staff-dashboard';
+  });
+
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showDraftsModal, setShowDraftsModal] = useState(false);
   const [draftInvoices, setDraftInvoices] = useState([]);
   const [activeResumedDraft, setActiveResumedDraft] = useState(null);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Sync view when role changes on login
+  useEffect(() => {
+    if (userRole === 'admin' && (currentView === 'staff-dashboard' || currentView === 'pos')) {
+      setCurrentView('admin-dashboard');
+    } else if (userRole === 'staff' && (currentView === 'admin-dashboard' || currentView === 'reports' || currentView === 'settings')) {
+      setCurrentView('staff-dashboard');
+    }
+  }, [userRole]);
+
+  // Handle protected navigation with role checks
+  const handleNavigate = (requestedView) => {
+    const staffRestrictedViews = ['admin-dashboard', 'reports', 'settings', 'offers', 'bill-records', 'customer-records'];
+
+    if (userRole === 'staff' && staffRestrictedViews.includes(requestedView)) {
+      toast.warning("Access Restricted: Staff members do not have permission to view Admin modules.", "Permission Denied");
+      setCurrentView('staff-dashboard');
+      return;
+    }
+
+    setCurrentView(requestedView);
+    setIsMobileOpen(false);
+  };
 
   const loadDrafts = () => {
     try {
@@ -65,12 +103,11 @@ function MainAppContent() {
 
   const handleResumeDraft = (draft) => {
     setActiveResumedDraft(draft);
-    // Remove resumed draft from storage
     const updated = draftInvoices.filter(d => d.id !== draft.id);
     localStorage.setItem('volt_draft_invoices', JSON.stringify(updated));
     setDraftInvoices(updated);
     setShowDraftsModal(false);
-    setCurrentView('pos');
+    handleNavigate('pos');
   };
 
   const handleDeleteDraft = (draftId) => {
@@ -84,26 +121,77 @@ function MainAppContent() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-dark-900 text-slate-100 font-sans transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-[#111827] text-[#F3F4F6] font-sans transition-colors duration-300">
       {/* Top Navbar Header */}
       <Navbar 
         currentView={currentView}
         onOpenShortcuts={() => setShowShortcutsModal(true)}
         onOpenDrafts={() => setShowDraftsModal(true)}
+        onToggleMobileMenu={() => setIsMobileOpen(!isMobileOpen)}
         draftCount={draftInvoices.length}
       />
 
       {/* Main Layout Container */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar Navigation */}
+        {/* Left Sidebar Navigation & Mobile Drawer */}
         <Sidebar 
           currentView={currentView} 
-          setCurrentView={setCurrentView} 
+          setCurrentView={handleNavigate} 
+          isMobileOpen={isMobileOpen}
+          setIsMobileOpen={setIsMobileOpen}
         />
 
         {/* View Content Area */}
-        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           <Suspense fallback={<PageLoader />}>
+            {/* ADMIN PORTAL VIEWS */}
+            {currentView === 'admin-dashboard' && (
+              <AdminDashboard onNavigate={handleNavigate} />
+            )}
+
+            {currentView === 'customer-records' && (
+              <CustomerRecords />
+            )}
+
+            {currentView === 'bill-records' && (
+              <BillRecords />
+            )}
+
+            {currentView === 'offers' && (
+              <OfferManagement />
+            )}
+
+            {currentView === 'reports' && (
+              <ReportsAnalytics />
+            )}
+
+            {currentView === 'settings' && (
+              userRole === 'admin' ? (
+                <ShopSettings />
+              ) : (
+                <div className="p-12 text-center space-y-4 flex flex-col items-center justify-center min-h-[500px]">
+                  <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+                    <Lock className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-100">Access Restricted</h3>
+                  <p className="text-sm text-slate-400 max-w-md">
+                    Shop Settings & Data Reset options require Admin Password authorization.
+                  </p>
+                  <button
+                    onClick={() => handleNavigate('staff-dashboard')}
+                    className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl transition shadow-sm"
+                  >
+                    RETURN TO DASHBOARD
+                  </button>
+                </div>
+              )
+            )}
+
+            {/* STAFF PORTAL VIEWS */}
+            {currentView === 'staff-dashboard' && (
+              <StaffDashboard onNavigate={handleNavigate} />
+            )}
+
             {currentView === 'pos' && (
               <POSBilling 
                 onCompleteSale={handleCompleteSale} 
@@ -123,30 +211,8 @@ function MainAppContent() {
               <SalesHistory onViewReceipt={handleViewReceipt} />
             )}
 
-            {currentView === 'analytics' && (
-              <DashboardAnalytics onNavigate={setCurrentView} />
-            )}
-
-            {currentView === 'settings' && (
-              userRole === 'admin' ? (
-                <ShopSettings />
-              ) : (
-                <div className="p-12 text-center space-y-4 flex flex-col items-center justify-center min-h-[500px]">
-                  <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
-                    <Lock className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-xl font-bold text-white">Access Restricted</h3>
-                  <p className="text-sm text-slate-400 max-w-md">
-                    Shop Settings & Data Reset options require Admin Password authorization. Staff users are authorized for POS Billing and Sales History.
-                  </p>
-                  <button
-                    onClick={() => setCurrentView('pos')}
-                    className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl transition shadow-lg shadow-amber-500/20"
-                  >
-                    RETURN TO ACTIVE POS BILLING
-                  </button>
-                </div>
-              )
+            {currentView === 'active-offers' && (
+              <ActiveOffers onNavigate={handleNavigate} />
             )}
           </Suspense>
         </main>

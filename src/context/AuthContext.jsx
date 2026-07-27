@@ -4,13 +4,21 @@ import { getShopDetails, saveShopDetails, DEFAULT_SHOP_DETAILS } from '../servic
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return sessionStorage.getItem('volt_pos_auth') === 'true';
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = sessionStorage.getItem('volt_pos_user') || localStorage.getItem('volt_pos_user');
+      if (savedUser) return JSON.parse(savedUser);
+    } catch (e) {}
+    const isAuth = sessionStorage.getItem('volt_pos_auth') === 'true' || localStorage.getItem('volt_pos_auth') === 'true';
+    const role = sessionStorage.getItem('volt_pos_role') || localStorage.getItem('volt_pos_role');
+    if (isAuth && role) {
+      return { username: role, role };
+    }
+    return null;
   });
 
-  const [userRole, setUserRole] = useState(() => {
-    return sessionStorage.getItem('volt_pos_role') || null;
-  });
+  const isAuthenticated = !!user;
+  const userRole = user ? user.role : null;
 
   const [activePassword, setActivePassword] = useState(DEFAULT_SHOP_DETAILS.appPassword);
   const [activeStaffPassword, setActiveStaffPassword] = useState(DEFAULT_SHOP_DETAILS.staffPassword || 'staff123');
@@ -37,34 +45,64 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('volt_shop_updated', handleShopUpdate);
   }, []);
 
-  const login = (passwordInput) => {
-    const trimmed = (passwordInput || '').trim();
-    if (trimmed === activePassword) {
-      setIsAuthenticated(true);
-      setUserRole('admin');
+  const login = (usernameInput, passwordInput) => {
+    let username = '';
+    let password = '';
+
+    if (typeof usernameInput === 'object' && usernameInput !== null) {
+      username = (usernameInput.username || '').trim().toLowerCase();
+      password = (usernameInput.password || '').trim();
+    } else if (passwordInput !== undefined) {
+      username = (usernameInput || '').trim().toLowerCase();
+      password = (passwordInput || '').trim();
+    } else {
+      // Single argument passed (could be password or string)
+      const inputStr = (usernameInput || '').trim();
+      if (inputStr === activePassword) {
+        username = 'admin';
+        password = inputStr;
+      } else if (inputStr === activeStaffPassword) {
+        username = 'staff';
+        password = inputStr;
+      } else {
+        password = inputStr;
+      }
+    }
+
+    // Validate Admin
+    if ((username === 'admin' || !username) && password === activePassword) {
+      const userObj = { username: 'admin', role: 'admin' };
+      setUser(userObj);
       sessionStorage.setItem('volt_pos_auth', 'true');
       sessionStorage.setItem('volt_pos_role', 'admin');
-      return { success: true, role: 'admin' };
+      sessionStorage.setItem('volt_pos_user', JSON.stringify(userObj));
+      localStorage.setItem('volt_pos_user', JSON.stringify(userObj));
+      return { success: true, role: 'admin', user: userObj };
     }
-    if (trimmed === activeStaffPassword) {
-      setIsAuthenticated(true);
-      setUserRole('staff');
+
+    // Validate Staff
+    if ((username === 'staff' || !username) && password === activeStaffPassword) {
+      const userObj = { username: 'staff', role: 'staff' };
+      setUser(userObj);
       sessionStorage.setItem('volt_pos_auth', 'true');
       sessionStorage.setItem('volt_pos_role', 'staff');
-      return { success: true, role: 'staff' };
+      sessionStorage.setItem('volt_pos_user', JSON.stringify(userObj));
+      localStorage.setItem('volt_pos_user', JSON.stringify(userObj));
+      return { success: true, role: 'staff', user: userObj };
     }
 
     return { 
       success: false, 
-      error: 'Invalid password. (Admin default: admin123 | Staff default: staff123)' 
+      error: 'Invalid credentials. (Admin: admin / admin123 | Staff: staff / staff123)' 
     };
   };
 
   const logout = () => {
-    setIsAuthenticated(false);
-    setUserRole(null);
+    setUser(null);
     sessionStorage.removeItem('volt_pos_auth');
     sessionStorage.removeItem('volt_pos_role');
+    sessionStorage.removeItem('volt_pos_user');
+    localStorage.removeItem('volt_pos_user');
   };
 
   const changePassword = async (currentPasswordInput, newPasswordInput) => {
@@ -109,6 +147,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{ 
+      user,
       isAuthenticated, 
       userRole, 
       login, 
@@ -130,3 +169,4 @@ export function useAuth() {
   }
   return context;
 }
+

@@ -113,15 +113,15 @@ export function AlertProvider({ children }) {
 
       {/* Stylish Confirmation Dialog Modal */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-dark-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200 font-sans">
+          <div className="bg-[#273549] border border-[#374151] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
             <div className="flex items-start space-x-4">
               <div className={`p-3 rounded-xl shrink-0 ${
                 confirmDialog.variant === 'danger'
-                  ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
                   : confirmDialog.variant === 'warning'
                   ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                  : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                  : 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
               }`}>
                 {confirmDialog.variant === 'danger' ? (
                   <AlertCircle className="w-6 h-6" />
@@ -130,28 +130,28 @@ export function AlertProvider({ children }) {
                 )}
               </div>
               <div className="flex-1">
-                <h3 className="text-base font-bold text-white font-sans">{confirmDialog.title}</h3>
-                <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">{confirmDialog.message}</p>
+                <h3 className="text-base font-bold text-[#F3F4F6] font-sans">{confirmDialog.title}</h3>
+                <p className="text-xs text-[#9CA3AF] mt-1.5 leading-relaxed">{confirmDialog.message}</p>
               </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-[#374151]">
               <button
                 type="button"
                 onClick={() => confirmDialog.resolve(false)}
-                className="px-4 py-2 bg-dark-800 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition"
+                className="px-4 py-2 bg-[#1F2937] hover:bg-[#374151] border border-[#374151] text-[#F3F4F6] text-xs font-semibold rounded-xl transition"
               >
                 {confirmDialog.cancelText}
               </button>
               <button
                 type="button"
                 onClick={() => confirmDialog.resolve(true)}
-                className={`px-4 py-2 font-bold text-xs rounded-xl shadow-lg transition ${
+                className={`px-4 py-2 font-bold text-xs rounded-xl shadow-sm transition ${
                   confirmDialog.variant === 'danger'
-                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20'
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
                     : confirmDialog.variant === 'warning'
-                    ? 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20'
-                    : 'bg-sky-500 hover:bg-sky-400 text-black shadow-sky-500/20'
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                    : 'bg-[#14B8A6] hover:bg-[#0D9488] text-white'
                 }`}
               >
                 {confirmDialog.confirmText}

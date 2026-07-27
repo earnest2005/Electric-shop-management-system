@@ -239,35 +239,35 @@ export default function ShopSettings() {
   if (isLoading) {
     return (
       <div className="p-12 text-center text-slate-400 flex items-center justify-center space-x-2">
-        <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
+        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
         <span>Loading Shop Configuration...</span>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 font-sans selection:bg-teal-500 selection:text-white">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-extrabold text-white text-2xl font-sans flex items-center gap-2">
-            <Settings className="w-7 h-7 text-amber-400" /> Shop Settings & Billing Configuration
+          <h2 className="font-extrabold text-[#F3F4F6] text-2xl font-sans flex items-center gap-2">
+            <Settings className="w-7 h-7 text-[#14B8A6]" /> Shop Settings & Billing Configuration
           </h2>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">
+          <p className="text-xs text-[#9CA3AF] font-mono mt-0.5">
             Modify shop branding, contact numbers, GSTIN details, thermal receipt headers, and store defaults
           </p>
         </div>
 
         {savedSuccess && (
-          <div className="flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs px-3.5 py-2 rounded-xl animate-fade-in font-mono">
+          <div className="flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs px-3.5 py-2 rounded-xl animate-fade-in font-mono font-bold">
             <CheckCircle2 className="w-4 h-4" />
             <span>Settings Saved & Synced!</span>
           </div>
         )}
 
         {clearSuccess && (
-          <div className="flex items-center space-x-1.5 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs px-3.5 py-2 rounded-xl animate-fade-in font-mono">
-            <CheckCircle2 className="w-4 h-4 text-rose-400" />
+          <div className="flex items-center space-x-1.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-3.5 py-2 rounded-xl animate-fade-in font-mono font-bold">
+            <CheckCircle2 className="w-4 h-4 text-red-400" />
             <span>All Bills & Customer Records Wiped Fresh!</span>
           </div>
         )}
@@ -275,54 +275,54 @@ export default function ShopSettings() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Card 1: Shop Profile & Branding */}
-        <div className="glass-panel p-6 rounded-2xl space-y-4">
-          <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 text-amber-400 font-semibold text-sm">
+        <div className="bg-[#273549] p-6 rounded-2xl border border-[#374151] shadow-sm space-y-4">
+          <div className="flex items-center space-x-2 border-b border-[#374151] pb-3 text-[#14B8A6] font-bold text-sm">
             <Store className="w-5 h-5" />
             <span>Store Identity & Branding</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div>
-              <label className="block text-slate-400 font-mono mb-1.5">Electrical Shop Name*</label>
+              <label className="block text-[#9CA3AF] font-mono font-semibold mb-1.5">Electrical Shop Name*</label>
               <input
                 type="text"
                 required
                 value={shopName}
                 onChange={e => setShopName(e.target.value)}
-                className="w-full glass-input px-3.5 py-2.5 rounded-xl font-bold text-white text-sm"
+                className="w-full glass-input px-3.5 py-2.5 rounded-xl font-bold text-[#F3F4F6] text-sm bg-[#1F2937] border-[#374151]"
                 placeholder="e.g. VOLT ELECTRICALS"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 font-mono mb-1.5">Shop Tagline / Business Subtitle</label>
+              <label className="block text-[#9CA3AF] font-mono font-semibold mb-1.5">Shop Tagline / Business Subtitle</label>
               <input
                 type="text"
                 value={tagline}
                 onChange={e => setTagline(e.target.value)}
-                className="w-full glass-input px-3.5 py-2.5 rounded-xl text-slate-200"
+                className="w-full glass-input px-3.5 py-2.5 rounded-xl text-[#F3F4F6] bg-[#1F2937] border-[#374151]"
                 placeholder="e.g. Power, Lighting & Hardware Master Store"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 font-mono mb-1.5">Shop Owner / Contact Person</label>
+              <label className="block text-[#9CA3AF] font-mono font-semibold mb-1.5">Shop Owner / Contact Person</label>
               <input
                 type="text"
                 value={ownerName}
                 onChange={e => setOwnerName(e.target.value)}
-                className="w-full glass-input px-3.5 py-2.5 rounded-xl text-slate-200"
+                className="w-full glass-input px-3.5 py-2.5 rounded-xl text-[#F3F4F6] bg-[#1F2937] border-[#374151]"
                 placeholder="e.g. Rajesh Kumar"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 font-mono mb-1.5">Contact Phone Number(s)</label>
+              <label className="block text-[#9CA3AF] font-mono font-semibold mb-1.5">Contact Phone Number(s)</label>
               <input
                 type="text"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
-                className="w-full glass-input px-3.5 py-2.5 rounded-xl font-mono text-amber-300"
+                className="w-full glass-input px-3.5 py-2.5 rounded-xl font-mono text-[#14B8A6] font-bold bg-[#1F2937] border-[#374151]"
                 placeholder="e.g. +91 98765 00000"
               />
             </div>
@@ -330,42 +330,42 @@ export default function ShopSettings() {
         </div>
 
         {/* Card 2: Location, GSTIN & Tax Defaults */}
-        <div className="glass-panel p-6 rounded-2xl space-y-4">
-          <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 text-amber-400 font-semibold text-sm">
+        <div className="bg-[#273549] p-6 rounded-2xl border border-[#374151] shadow-sm space-y-4">
+          <div className="flex items-center space-x-2 border-b border-[#374151] pb-3 text-[#14B8A6] font-bold text-sm">
             <MapPin className="w-5 h-5" />
             <span>Taxation, Address & Invoice Defaults</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="md:col-span-2">
-              <label className="block text-slate-400 font-mono mb-1.5">Complete Shop Address (Appears on Bills)</label>
+              <label className="block text-[#9CA3AF] font-mono font-semibold mb-1.5">Complete Shop Address (Appears on Bills)</label>
               <input
                 type="text"
                 value={address}
                 onChange={e => setAddress(e.target.value)}
-                className="w-full glass-input px-3.5 py-2.5 rounded-xl text-slate-200"
+                className="w-full glass-input px-3.5 py-2.5 rounded-xl text-[#F3F4F6] bg-[#1F2937] border-[#374151]"
                 placeholder="e.g. Main Market Road, Near Electric Substation, Sector 4"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 font-mono mb-1.5">GSTIN Registration Number</label>
+              <label className="block text-[#9CA3AF] font-mono font-semibold mb-1.5">GSTIN Registration Number</label>
               <input
                 type="text"
                 value={gstin}
                 onChange={e => setGstin(e.target.value)}
-                className="w-full glass-input px-3.5 py-2.5 rounded-xl font-mono text-amber-400 font-bold tracking-wider"
+                className="w-full glass-input px-3.5 py-2.5 rounded-xl font-mono text-[#14B8A6] font-bold tracking-wider bg-[#1F2937] border-[#374151]"
                 placeholder="e.g. 29ABCDE1234F1Z5"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 font-mono mb-1.5">Default GST Tax Percentage (%)</label>
+              <label className="block text-[#9CA3AF] font-mono font-semibold mb-1.5">Default GST Tax Percentage (%)</label>
               <input
                 type="number"
                 value={defaultTaxPercent}
                 onChange={e => setDefaultTaxPercent(e.target.value)}
-                className="w-full glass-input px-3.5 py-2.5 rounded-xl font-mono text-emerald-400 font-bold"
+                className="w-full glass-input px-3.5 py-2.5 rounded-xl font-mono text-emerald-400 font-bold bg-[#1F2937] border-[#374151]"
                 placeholder="18"
               />
             </div>
@@ -373,23 +373,23 @@ export default function ShopSettings() {
         </div>
 
         {/* Card 3: Thermal Receipt Customization */}
-        <div className="glass-panel p-6 rounded-2xl space-y-4">
-          <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 text-amber-400 font-semibold text-sm">
+        <div className="bg-[#273549] p-6 rounded-2xl border border-[#374151] shadow-sm space-y-4">
+          <div className="flex items-center space-x-2 border-b border-[#374151] pb-3 text-[#14B8A6] font-bold text-sm">
             <FileText className="w-5 h-5" />
             <span>Thermal Bill Print Receipt Customization</span>
           </div>
 
           <div className="text-xs space-y-3">
             <div>
-              <label className="block text-slate-400 font-mono mb-1.5">Invoice Footer Note / Warranty Terms</label>
+              <label className="block text-[#9CA3AF] font-mono font-semibold mb-1.5">Invoice Footer Note / Warranty Terms</label>
               <textarea
                 rows={3}
                 value={invoiceFooterNote}
                 onChange={e => setInvoiceFooterNote(e.target.value)}
-                className="w-full glass-input p-3 rounded-xl text-slate-200 font-sans"
+                className="w-full glass-input p-3 rounded-xl text-[#F3F4F6] font-sans bg-[#1F2937] border-[#374151]"
                 placeholder="Thank you for shopping at Volt Electricals! Warranty valid against invoice."
               />
-              <p className="text-[11px] text-slate-500 mt-1 font-mono">
+              <p className="text-[11px] text-[#9CA3AF] mt-1 font-mono">
                 This note will be printed at the bottom of every 80mm thermal receipt.
               </p>
             </div>
@@ -397,53 +397,53 @@ export default function ShopSettings() {
         </div>
 
         {/* Card 4: Terminal Access & Security Password */}
-        <div className="glass-panel p-6 rounded-2xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center space-x-2 text-amber-400 font-semibold text-sm">
+        <div className="bg-[#273549] p-6 rounded-2xl border border-[#374151] shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-[#374151] pb-3">
+            <div className="flex items-center space-x-2 text-[#14B8A6] font-bold text-sm">
               <KeyRound className="w-5 h-5" />
               <span>Terminal Access Password & Security</span>
             </div>
-            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono flex items-center gap-1">
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded font-mono font-bold flex items-center gap-1">
               <ShieldCheck className="w-3 h-3" /> CLOUD & LOCAL SYNCED
             </span>
           </div>
 
           <div className="text-xs space-y-3 font-sans">
-            <p className="text-slate-300 font-mono text-[11px]">
+            <p className="text-[#9CA3AF] font-mono text-[11px]">
               Update the terminal password used to unlock POS billing, inventory, and customer ledgers. Password changes are saved to Cloud Firestore and sync automatically across all devices.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
               <div>
-                <label className="block text-slate-400 font-mono mb-1">Current Password*</label>
+                <label className="block text-[#9CA3AF] font-mono font-semibold mb-1">Current Password*</label>
                 <input
                   type="password"
                   value={currentPasswordInput}
                   onChange={e => setCurrentPasswordInput(e.target.value)}
                   placeholder="Enter current password..."
-                  className="w-full glass-input px-3 py-2 rounded-xl font-mono"
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono bg-[#1F2937] border-[#374151] text-[#F3F4F6]"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 font-mono mb-1">New Password*</label>
+                <label className="block text-[#9CA3AF] font-mono font-semibold mb-1">New Password*</label>
                 <input
                   type="password"
                   value={newPasswordInput}
                   onChange={e => setNewPasswordInput(e.target.value)}
                   placeholder="Enter new password..."
-                  className="w-full glass-input px-3 py-2 rounded-xl font-mono text-amber-300"
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono text-[#14B8A6] font-bold bg-[#1F2937] border-[#374151]"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 font-mono mb-1">Confirm New Password*</label>
+                <label className="block text-[#9CA3AF] font-mono font-semibold mb-1">Confirm New Password*</label>
                 <input
                   type="password"
                   value={confirmPasswordInput}
                   onChange={e => setConfirmPasswordInput(e.target.value)}
                   placeholder="Re-enter new password..."
-                  className="w-full glass-input px-3 py-2 rounded-xl font-mono text-amber-300"
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono text-[#14B8A6] font-bold bg-[#1F2937] border-[#374151]"
                 />
               </div>
             </div>
@@ -453,7 +453,7 @@ export default function ShopSettings() {
                 type="button"
                 onClick={handleChangePasswordSubmit}
                 disabled={isChangingPass}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl shadow-lg transition flex items-center space-x-1.5 disabled:opacity-50"
+                className="px-4 py-2 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5 disabled:opacity-50"
               >
                 {isChangingPass ? (
                   <>
@@ -472,42 +472,42 @@ export default function ShopSettings() {
         </div>
 
         {/* Card 4B: Staff / Cashier Access Password Management */}
-        <div className="glass-panel p-6 rounded-2xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center space-x-2 text-blue-400 font-semibold text-sm">
+        <div className="bg-[#273549] p-6 rounded-2xl border border-[#374151] shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-[#374151] pb-3">
+            <div className="flex items-center space-x-2 text-[#14B8A6] font-bold text-sm">
               <KeyRound className="w-5 h-5" />
               <span>Staff / Cashier Access Password</span>
             </div>
-            <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-mono">
+            <span className="text-[10px] bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded font-mono font-bold">
               POS BILLING ACCESS ONLY
             </span>
           </div>
 
           <div className="text-xs space-y-3 font-sans">
-            <p className="text-slate-300 font-mono text-[11px]">
+            <p className="text-[#9CA3AF] font-mono text-[11px]">
               Set or update the password given to counter staff. Staff users can perform POS billing and print receipts, but cannot modify store settings, delete customer records, or access system resets.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
               <div>
-                <label className="block text-slate-400 font-mono mb-1">Current Admin Password (Authorization)*</label>
+                <label className="block text-[#9CA3AF] font-mono font-semibold mb-1">Current Admin Password (Authorization)*</label>
                 <input
                   type="password"
                   value={adminPassForStaff}
                   onChange={e => setAdminPassForStaff(e.target.value)}
                   placeholder="Enter your Admin password..."
-                  className="w-full glass-input px-3 py-2 rounded-xl font-mono"
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono bg-[#1F2937] border-[#374151] text-[#F3F4F6]"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 font-mono mb-1">New Staff Password*</label>
+                <label className="block text-[#9CA3AF] font-mono font-semibold mb-1">New Staff Password*</label>
                 <input
                   type="password"
                   value={staffPasswordInput}
                   onChange={e => setStaffPasswordInput(e.target.value)}
                   placeholder="Enter new staff password (e.g. staff123)..."
-                  className="w-full glass-input px-3 py-2 rounded-xl font-mono text-blue-300"
+                  className="w-full glass-input px-3 py-2 rounded-xl font-mono text-[#14B8A6] font-bold bg-[#1F2937] border-[#374151]"
                 />
               </div>
             </div>
@@ -517,7 +517,7 @@ export default function ShopSettings() {
                 type="button"
                 onClick={handleChangeStaffPasswordSubmit}
                 disabled={isChangingStaffPass}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center space-x-1.5 disabled:opacity-50"
+                className="px-4 py-2 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5 disabled:opacity-50"
               >
                 {isChangingStaffPass ? (
                   <>
@@ -536,18 +536,18 @@ export default function ShopSettings() {
         </div>
 
         {/* Card 4: JSON Backup & Offline System Export */}
-        <div className="glass-panel p-6 rounded-2xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center space-x-2 text-amber-400 font-semibold text-sm">
+        <div className="bg-[#273549] p-6 rounded-2xl border border-[#374151] shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-[#374151] pb-3">
+            <div className="flex items-center space-x-2 text-[#14B8A6] font-bold text-sm">
               <Database className="w-5 h-5" />
               <span>Full System Data Backup & Restore</span>
             </div>
-            <span className="text-xs bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded font-mono">
+            <span className="text-xs bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2.5 py-1 rounded font-mono font-bold">
               OFFLINE PROTECTED
             </span>
           </div>
 
-          <p className="text-xs text-slate-300 font-mono">
+          <p className="text-xs text-[#9CA3AF] font-mono">
             Download an offline JSON file containing all products, sales history, customer dues, and shop settings for emergency backup or offline transfer.
           </p>
 
@@ -562,7 +562,7 @@ export default function ShopSettings() {
             <button
               type="button"
               onClick={handleExportBackupJSON}
-              className="flex items-center space-x-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl shadow-lg transition"
+              className="flex items-center space-x-2 px-4 py-2.5 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-extrabold text-xs rounded-xl shadow-sm transition"
             >
               <Download className="w-4 h-4" />
               <span>DOWNLOAD SYSTEM BACKUP (JSON)</span>
@@ -570,27 +570,27 @@ export default function ShopSettings() {
             <button
               type="button"
               onClick={() => backupInputRef.current?.click()}
-              className="flex items-center space-x-2 px-4 py-2.5 bg-dark-800 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs rounded-xl transition"
+              className="flex items-center space-x-2 px-4 py-2.5 bg-[#1F2937] hover:bg-[#1F2937]/80 text-[#F3F4F6] border border-[#374151] font-bold text-xs rounded-xl transition shadow-sm"
             >
-              <Upload className="w-4 h-4 text-amber-400" />
+              <Upload className="w-4 h-4 text-[#14B8A6]" />
               <span>RESTORE FROM BACKUP FILE</span>
             </button>
           </div>
         </div>
 
         {/* Card 5: Database Data Reset / Wipe Bills & Customers */}
-        <div className="p-6 rounded-2xl bg-rose-500/5 border border-rose-500/20 space-y-4">
+        <div className="p-6 rounded-2xl bg-[#1F2937] border border-red-500/30 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-rose-400 font-semibold text-sm">
+            <div className="flex items-center space-x-2 text-red-400 font-bold text-sm">
               <AlertTriangle className="w-5 h-5" />
               <span>Data Reset & Clear Records</span>
             </div>
-            <span className="text-[10px] bg-rose-500/20 text-rose-300 px-2.5 py-1 rounded font-mono">
+            <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded font-mono font-bold">
               DANGER ZONE
             </span>
           </div>
 
-          <p className="text-xs text-slate-300 leading-relaxed font-sans">
+          <p className="text-xs text-[#9CA3AF] leading-relaxed font-sans">
             Wipe all historical invoice bills, customer ledger profiles, and due payments to start with a clean slate for store opening. Inventory products will remain untouched.
           </p>
 
@@ -598,7 +598,7 @@ export default function ShopSettings() {
             type="button"
             onClick={handleClearData}
             disabled={isClearing}
-            className="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition flex items-center space-x-2 disabled:opacity-50"
+            className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition flex items-center space-x-2 disabled:opacity-50 shadow-sm"
           >
             {isClearing ? (
               <>
@@ -615,15 +615,15 @@ export default function ShopSettings() {
         </div>
 
         {/* Card 5: Connected Cloud Database Overview */}
-        <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between text-xs font-mono">
+        <div className="p-4 rounded-2xl bg-[#1F2937] border border-emerald-500/30 flex items-center justify-between text-xs font-mono shadow-sm">
           <div className="flex items-center space-x-3 text-emerald-400">
-            <Database className="w-5 h-5" />
+            <Database className="w-5 h-5 text-emerald-400" />
             <div>
               <div className="font-bold">Cloud Database Active</div>
-              <div className="text-slate-400 text-[11px]">Connected Project ID: <strong className="text-emerald-300">electrical-shop-system-8aee0</strong></div>
+              <div className="text-[#9CA3AF] text-[11px]">Connected Project ID: <strong className="text-emerald-400">electrical-shop-system-8aee0</strong></div>
             </div>
           </div>
-          <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-1 rounded-full">
+          <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-1 rounded-full font-bold">
             REAL-TIME SYNCED
           </span>
         </div>
@@ -633,7 +633,7 @@ export default function ShopSettings() {
           <button
             type="submit"
             disabled={isSaving}
-            className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-extrabold text-sm rounded-xl shadow-xl shadow-amber-500/20 transition flex items-center space-x-2 disabled:opacity-50"
+            className="px-6 py-3 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-extrabold text-sm rounded-xl shadow-sm transition flex items-center space-x-2 disabled:opacity-50"
           >
             {isSaving ? (
               <>

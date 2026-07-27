@@ -2,17 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Barcode, Search, ShoppingCart, Plus, Minus, Trash2, User, Phone, 
   CreditCard, DollarSign, QrCode, AlertTriangle, CheckCircle2, Zap, 
-  Tag, ChevronRight, FileText, ArrowRight, PauseCircle, RotateCcw, Clock
+  Tag, ChevronRight, FileText, ArrowRight, PauseCircle, RotateCcw, Clock, Sparkles
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { formatRupees, rupeesToPaise, paiseToRupees, formatNumberIN } from '../utils/currency';
-import { getProducts, searchCustomerByPhone, processSaleBatch, getPurchases, getCustomers } from '../services/db';
+import { getProducts, searchCustomerByPhone, processSaleBatch, getPurchases, getCustomers, getOffers } from '../services/db';
 import { useAlert } from '../context/AlertContext';
+import { useAuth } from '../context/AuthContext';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   const { toast } = useAlert();
+  const { user, userRole } = useAuth();
   const [products, setProducts] = useState([]);
+  const [activeOffers, setActiveOffers] = useState([]);
+  const [selectedOfferId, setSelectedOfferId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -83,6 +87,8 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     setRecentPurchases(purchases.slice(0, 5));
     const custs = await getCustomers();
     setAllCustomers(custs);
+    const offers = await getOffers();
+    setActiveOffers(offers.filter(o => o.status === 'active'));
   };
 
   useEffect(() => {
@@ -292,6 +298,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     setIsSubmitting(true);
 
     try {
+      const staffUsername = user?.username || userRole || 'staff';
       const saleData = {
         customer: {
           phone: customerPhone.replace(/\D/g, ''),
@@ -307,7 +314,9 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
         totalAmount: totalAmountPaise,
         paidAmount: paidAmountPaise,
         dueAmount: dueAmountPaise,
-        paymentMethod
+        paymentMethod,
+        staffName: staffUsername,
+        staff: staffUsername
       };
 
       const completedRecord = await processSaleBatch(saleData);
@@ -355,34 +364,34 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 selection:bg-teal-500 selection:text-white">
       {/* Top Header Barcode Scanner Input */}
-      <div className="glass-panel p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="glass-panel p-3.5 sm:p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4 border border-[#374151] bg-[#273549] shadow-sm">
         <div className="flex items-center space-x-3 w-full md:w-auto">
-          <div className="p-2.5 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-400">
+          <div className="p-2.5 bg-teal-500/10 rounded-xl border border-teal-500/30 text-[#14B8A6] shrink-0">
             <Barcode className="w-6 h-6 animate-pulse" />
           </div>
           <div>
-            <h2 className="font-bold text-white text-lg font-sans">Active POS Checkout Engine</h2>
-            <p className="text-xs text-slate-400 font-mono">Scan item barcode or search catalog (Press F2 for Barcode Focus)</p>
+            <h2 className="font-bold text-[#F3F4F6] text-base sm:text-lg font-sans">Active POS Checkout Engine</h2>
+            <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-mono">Scan barcode or search catalog (F2 for Focus)</p>
           </div>
         </div>
 
         <form onSubmit={handleBarcodeSubmit} className="flex items-center space-x-2 w-full md:w-auto">
           <div className="relative w-full md:w-72">
-            <Barcode className="w-5 h-5 text-amber-400 absolute left-3 top-2.5" />
+            <Barcode className="w-5 h-5 text-[#14B8A6] absolute left-3 top-3.5" />
             <input
               ref={barcodeInputRef}
               type="text"
               value={barcodeInput}
               onChange={e => setBarcodeInput(e.target.value)}
-              placeholder="Scan Barcode / Enter Code (F2)..."
-              className="w-full glass-input pl-10 pr-4 py-2 rounded-xl text-xs font-mono font-bold"
+              placeholder="Scan Barcode / Code (F2)..."
+              className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-xs sm:text-sm font-mono font-bold min-h-[48px] border-[#374151] focus:border-[#14B8A6]"
             />
           </div>
           <button
             type="submit"
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl transition shrink-0"
+            className="px-4 py-2.5 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-bold text-xs rounded-xl transition shrink-0 min-h-[48px] flex items-center justify-center shadow-sm"
           >
             Add Item
           </button>
@@ -390,9 +399,9 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
       </div>
 
       {/* Main Grid: Left Catalog, Right Billing Cart */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
         
-        {/* LEFT COLUMN: Product Catalog (7 Cols) */}
+        {/* LEFT COLUMN: Product Catalog (7 Cols on desktop/tablet, stacked on mobile) */}
         <div className="lg:col-span-7 space-y-4">
           {/* Search & Category Filter */}
           <div className="space-y-3">
@@ -402,21 +411,21 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search products by name, brand, or code..."
-                className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-xs"
+                className="w-full glass-input pl-10 pr-4 py-3 rounded-xl text-xs sm:text-sm min-h-[48px] border-[#374151] focus:border-[#14B8A6]"
               />
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-3.5" />
             </div>
 
             {/* Category Pills */}
-            <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-none touch-pan-x">
               {categories.map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition min-h-[40px] shrink-0 ${
                     selectedCategory === cat
-                      ? 'bg-amber-500 text-black font-semibold shadow-md shadow-amber-500/10'
-                      : 'bg-dark-800 text-slate-400 hover:text-white border border-slate-800'
+                      ? 'bg-[#14B8A6] text-white shadow-sm font-bold'
+                      : 'bg-[#273549] text-[#9CA3AF] hover:text-[#F3F4F6] border border-[#374151] hover:border-[#14B8A6]/40'
                   }`}
                 >
                   {cat}
@@ -431,33 +440,33 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
               <div
                 key={product.barcode}
                 onClick={() => addToCart(product)}
-                className={`glass-panel p-3.5 rounded-xl cursor-pointer hover:border-amber-500/40 transition group relative flex flex-col justify-between ${
+                className={`bg-[#273549] border border-[#374151] p-3.5 rounded-xl cursor-pointer hover:border-[#14B8A6] hover:shadow-md transition group relative flex flex-col justify-between ${
                   product.currentStock <= 0 ? 'opacity-50 pointer-events-none' : ''
                 }`}
               >
                 <div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono mb-1">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded text-amber-300">{product.brand}</span>
-                    <span className="text-slate-500">#{product.barcode}</span>
+                  <div className="flex items-center justify-between text-[11px] text-[#9CA3AF] font-mono mb-1">
+                    <span className="bg-teal-500/10 px-2 py-0.5 rounded text-teal-300 font-semibold border border-teal-500/20">{product.brand}</span>
+                    <span className="text-[#9CA3AF]">#{product.barcode}</span>
                   </div>
-                  <h4 className="font-semibold text-white text-xs leading-snug group-hover:text-amber-400 transition">
+                  <h4 className="font-semibold text-[#F3F4F6] text-xs leading-snug group-hover:text-[#14B8A6] transition">
                     {product.productName}
                   </h4>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between pt-2 border-t border-slate-800/60">
-                  <div className="font-bold text-amber-400 font-mono text-sm">
+                <div className="mt-3 flex items-center justify-between pt-2 border-t border-[#374151]">
+                  <div className="font-bold text-[#14B8A6] font-mono text-sm">
                     {formatRupees(product.basePrice)}
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
                       product.currentStock <= product.minStockAlert 
-                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' 
-                        : 'bg-emerald-500/10 text-emerald-400'
+                        ? 'bg-red-500/10 text-red-400 border border-red-500/30' 
+                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                     }`}>
                       Stock: {product.currentStock}
                     </span>
-                    <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-black flex items-center justify-center transition">
+                    <div className="w-7 h-7 rounded-lg bg-teal-500/10 text-[#14B8A6] group-hover:bg-[#14B8A6] group-hover:text-white flex items-center justify-center transition">
                       <Plus className="w-4 h-4" />
                     </div>
                   </div>
@@ -469,25 +478,25 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
 
         {/* RIGHT COLUMN: Active Invoice Generator & Billing Checkout (5 Cols) */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="glass-panel-glow p-5 rounded-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-[#273549] border border-[#374151] p-5 rounded-2xl space-y-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-[#374151] pb-3">
               <div className="flex items-center space-x-2">
-                <ShoppingCart className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-white text-base">Active Invoice Cart</h3>
+                <ShoppingCart className="w-5 h-5 text-[#14B8A6]" />
+                <h3 className="font-bold text-[#F3F4F6] text-base">Active Invoice Cart</h3>
               </div>
               <div className="flex items-center space-x-2">
                 {cart.length > 0 && (
                   <button
                     type="button"
                     onClick={handleHoldBill}
-                    className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-mono font-bold transition"
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono font-bold transition"
                     title="Hold Bill (F8)"
                   >
                     <PauseCircle className="w-3.5 h-3.5" />
                     <span>Hold Bill (F8)</span>
                   </button>
                 )}
-                <span className="text-xs bg-amber-500/20 text-amber-400 font-mono px-2 py-0.5 rounded">
+                <span className="text-xs bg-teal-500/10 text-teal-300 font-mono px-2 py-0.5 rounded border border-teal-500/30 font-bold">
                   {cart.length} items
                 </span>
               </div>
@@ -495,27 +504,27 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
 
             {/* Undo Removed Item Banner */}
             {lastRemovedItem && (
-              <div className="p-2.5 bg-amber-500/15 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-center justify-between animate-in fade-in">
+              <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-center justify-between animate-in fade-in">
                 <span>Removed <strong>{lastRemovedItem.productName}</strong></span>
                 <button
                   type="button"
                   onClick={undoRemoveItem}
-                  className="flex items-center space-x-1 font-bold text-white bg-amber-500 hover:bg-amber-400 text-black px-2 py-0.5 rounded text-[11px] transition"
+                  className="flex items-center space-x-1 font-bold text-white bg-amber-600 hover:bg-amber-700 px-2 py-0.5 rounded text-[11px] transition shadow-sm"
                 >
-                  <RotateCcw className="w-3 h-3 text-black" />
+                  <RotateCcw className="w-3 h-3 text-white" />
                   <span>Undo</span>
                 </button>
               </div>
             )}
 
             {/* Customer Lookup & Due Tracking Box */}
-            <div className="bg-dark-900/90 border border-slate-800 p-3.5 rounded-xl space-y-2.5">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+            <div className="bg-[#1F2937] border border-[#374151] p-3.5 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between text-xs font-semibold text-[#9CA3AF]">
                 <span className="flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-amber-400" /> Customer Account Lookup (F4)
+                  <User className="w-3.5 h-3.5 text-[#14B8A6]" /> Customer Account Lookup (F4)
                 </span>
                 {existingCustomer && (
-                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded">
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">
                     ✓ Profile Linked
                   </span>
                 )}
@@ -533,28 +542,28 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                     }}
                     onFocus={() => setShowCustomerSuggestions(true)}
                     placeholder="Mobile (10 Digits)*"
-                    className="w-full glass-input px-3 py-1.5 rounded-lg text-xs font-mono text-amber-400 font-bold"
+                    className="w-full glass-input px-3 py-1.5 rounded-lg text-xs font-mono text-teal-300 font-bold border-[#374151]"
                     maxLength={10}
                   />
 
                   {/* Auto-suggest dropdown when typing */}
                   {showCustomerSuggestions && matchedCustomers.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-dark-900 border border-amber-500/40 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-800">
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-[#273549] border border-[#374151] rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-[#374151]">
                       {matchedCustomers.map(cust => (
                         <div
                           key={cust.id || cust.phone}
                           onClick={() => selectCustomer(cust)}
-                          className="p-2.5 hover:bg-amber-500/15 cursor-pointer transition flex items-center justify-between text-xs"
+                          className="p-2.5 hover:bg-[#1F2937] cursor-pointer transition flex items-center justify-between text-xs"
                         >
                           <div>
-                            <div className="font-bold text-white flex items-center gap-1">
+                            <div className="font-bold text-[#F3F4F6] flex items-center gap-1">
                               <span>{cust.name}</span>
                             </div>
-                            <div className="text-[11px] text-amber-400 font-mono">📱 {cust.phone}</div>
+                            <div className="text-[11px] text-[#14B8A6] font-mono">📱 {cust.phone}</div>
                           </div>
                           <div className="text-right text-[10px]">
                             {(cust.totalDue || 0) > 0 ? (
-                              <span className="text-rose-400 font-mono font-bold">Due: ₹{formatNumberIN((cust.totalDue || 0) / 100)}</span>
+                              <span className="text-red-400 font-mono font-bold">Due: {formatRupees(cust.totalDue || 0)}</span>
                             ) : (
                               <span className="text-emerald-400 font-mono">Clean Ledger</span>
                             )}
@@ -570,17 +579,17 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                   value={customerName}
                   onChange={e => setCustomerName(e.target.value)}
                   placeholder="Customer Name*"
-                  className="glass-input px-3 py-1.5 rounded-lg text-xs font-bold text-white"
+                  className="glass-input px-3 py-1.5 rounded-lg text-xs font-bold text-[#F3F4F6] border-[#374151]"
                 />
               </div>
 
               {/* Customer Pending Due Warning Alert! */}
               {existingCustomer && (existingCustomer.totalDue || 0) > 0 && (
-                <div className="p-2.5 bg-rose-500/15 border border-rose-500/30 rounded-lg text-xs text-rose-300 flex items-start space-x-2 animate-pulse">
-                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400 flex items-start space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                   <div>
                     <div className="font-bold">⚠️ Customer Pending Due Warning:</div>
-                    <div>{existingCustomer.name} has previous outstanding dues of <strong className="text-white underline">{formatRupees(existingCustomer.totalDue)}</strong>.</div>
+                    <div>{existingCustomer.name} has previous outstanding dues of <strong className="text-red-300 underline">{formatRupees(existingCustomer.totalDue)}</strong>.</div>
                   </div>
                 </div>
               )}
@@ -589,31 +598,31 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
             {/* Cart Items List */}
             <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
               {cart.length === 0 ? (
-                <div className="py-8 text-center text-slate-500 text-xs font-mono">
+                <div className="py-8 text-center text-[#9CA3AF] text-xs font-mono">
                   Cart is empty. Click items on the left to generate bill.
                 </div>
               ) : (
                 cart.map(item => (
-                  <div key={item.barcode} className="bg-dark-900/80 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                  <div key={item.barcode} className="bg-[#1F2937] p-3 rounded-xl border border-[#374151] flex items-center justify-between text-xs">
                     <div className="flex-1 pr-2">
-                      <div className="font-semibold text-white truncate max-w-[170px]">{item.productName}</div>
-                      <div className="text-[11px] text-amber-400 font-mono">₹{formatNumberIN(item.basePrice)} × {item.qty}</div>
+                      <div className="font-semibold text-[#F3F4F6] truncate max-w-[150px] sm:max-w-[180px]">{item.productName}</div>
+                      <div className="text-[11px] text-[#14B8A6] font-mono">₹{formatNumberIN(item.basePrice)} × {item.qty}</div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <div className="flex items-center bg-dark-800 border border-slate-700 rounded-lg">
-                        <button onClick={() => updateCartQty(item.barcode, -1)} className="p-1 text-slate-400 hover:text-white">
-                          <Minus className="w-3 h-3" />
+                      <div className="flex items-center bg-[#273549] border border-[#374151] rounded-xl overflow-hidden">
+                        <button onClick={() => updateCartQty(item.barcode, -1)} className="p-2 text-[#9CA3AF] hover:text-[#F3F4F6] min-w-[38px] min-h-[38px] flex items-center justify-center">
+                          <Minus className="w-4 h-4" />
                         </button>
-                        <span className="px-2 font-mono font-bold text-white text-xs">{item.qty}</span>
-                        <button onClick={() => updateCartQty(item.barcode, 1)} className="p-1 text-slate-400 hover:text-white">
-                          <Plus className="w-3 h-3" />
+                        <span className="px-2 font-mono font-bold text-[#F3F4F6] text-xs">{item.qty}</span>
+                        <button onClick={() => updateCartQty(item.barcode, 1)} className="p-2 text-[#9CA3AF] hover:text-[#F3F4F6] min-w-[38px] min-h-[38px] flex items-center justify-center">
+                          <Plus className="w-4 h-4" />
                         </button>
                       </div>
-                      <span className="font-mono font-bold text-white text-xs w-16 text-right">
+                      <span className="font-mono font-bold text-[#F3F4F6] text-xs w-16 text-right">
                         ₹{formatNumberIN(item.total)}
                       </span>
-                      <button onClick={() => removeFromCart(item.barcode)} className="text-slate-500 hover:text-rose-400 p-1">
-                        <Trash2 className="w-3.5 h-3.5" />
+                      <button onClick={() => removeFromCart(item.barcode)} className="text-[#9CA3AF] hover:text-red-400 p-2 min-w-[38px] min-h-[38px] flex items-center justify-center">
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -622,17 +631,17 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
             </div>
 
             {/* Payment Method Selector & Partial Due Calculator */}
-            <div className="bg-dark-900/90 border border-slate-800 p-3.5 rounded-xl space-y-3">
-              <div className="text-xs font-semibold text-slate-300">Payment & Settlement Mode</div>
-              <div className="grid grid-cols-4 gap-1.5 text-xs">
+            <div className="bg-[#1F2937] border border-[#374151] p-3.5 rounded-xl space-y-3">
+              <div className="text-xs font-semibold text-[#9CA3AF]">Payment & Settlement Mode</div>
+              <div className="grid grid-cols-4 gap-2 text-xs">
                 {['UPI', 'Cash', 'Card', 'Credit/Due'].map(mode => (
                   <button
                     key={mode}
                     onClick={() => setPaymentMethod(mode)}
-                    className={`py-1.5 rounded-lg font-mono text-[11px] font-semibold transition ${
+                    className={`py-2.5 rounded-xl font-mono text-xs font-semibold transition min-h-[44px] ${
                       paymentMethod === mode
-                        ? 'bg-amber-500 text-black shadow-sm'
-                        : 'bg-dark-800 text-slate-400 hover:text-white border border-slate-800'
+                        ? 'bg-[#14B8A6] text-white shadow-sm font-bold'
+                        : 'bg-[#273549] text-[#9CA3AF] hover:text-[#F3F4F6] border border-[#374151]'
                     }`}
                   >
                     {mode}
@@ -644,14 +653,14 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
               <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] text-slate-400 font-mono">Amount Paid Now (₹)</label>
+                    <label className="text-[11px] text-[#9CA3AF] font-mono">Amount Paid Now (₹)</label>
                     {paymentMethod !== 'Credit/Due' && totalAmountPaise > 0 && (
                       <button 
                         type="button"
                         onClick={() => setPaidRupees((totalAmountPaise / 100).toString())}
-                        className="text-[10px] text-amber-400 hover:text-amber-300 font-mono underline font-bold"
+                        className="px-2 py-0.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded font-mono text-[10px] font-bold whitespace-nowrap transition inline-flex items-center"
                       >
-                        Full Pay (₹{formatNumberIN(totalAmountPaise / 100)})
+                        Full Pay ({formatRupees(totalAmountPaise)})
                       </button>
                     )}
                   </div>
@@ -661,15 +670,15 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                     onChange={e => setPaidRupees(e.target.value)}
                     placeholder="Enter amount paid (₹)"
                     disabled={paymentMethod === 'Credit/Due'}
-                    className="w-full glass-input px-3 py-1.5 rounded-lg font-mono text-emerald-400 font-bold"
+                    className="w-full glass-input px-3 py-2 rounded-lg font-mono text-emerald-400 font-bold min-h-[44px] border-[#374151]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 font-mono mb-1">New Due Balance</label>
-                  <div className={`px-3 py-1.5 rounded-lg font-mono font-bold border text-xs ${
+                  <label className="block text-[11px] text-[#9CA3AF] font-mono mb-1">New Due Balance</label>
+                  <div className={`px-3 py-2 rounded-lg font-mono font-bold border text-xs min-h-[44px] flex items-center ${
                     dueAmountPaise > 0 
-                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' 
-                      : 'bg-dark-800 border-slate-800 text-slate-400'
+                      ? 'bg-red-500/10 border-red-500/30 text-red-400' 
+                      : 'bg-[#273549] border-[#374151] text-[#9CA3AF]'
                   }`}>
                     {formatRupees(dueAmountPaise)}
                   </div>
@@ -678,49 +687,49 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
             </div>
 
             {/* Total Footer */}
-            <div className="border-t border-slate-800 pt-3 space-y-1.5 text-xs font-mono">
-              <div className="flex justify-between text-slate-400">
+            <div className="border-t border-[#374151] pt-3 space-y-1.5 text-xs font-mono">
+              <div className="flex justify-between text-[#9CA3AF]">
                 <span>Subtotal:</span>
                 <span>{formatRupees(subtotalPaise)}</span>
               </div>
-              <div className="flex justify-between text-slate-400">
+              <div className="flex justify-between text-[#9CA3AF]">
                 <span>GST (18% included):</span>
                 <span>{formatRupees(taxPaise)}</span>
               </div>
-              <div className="flex justify-between text-white font-extrabold text-lg pt-1 border-t border-slate-800">
+              <div className="flex justify-between text-[#F3F4F6] font-extrabold text-lg pt-1 border-t border-[#374151]">
                 <span>TOTAL AMOUNT:</span>
-                <span className="text-amber-400">{formatRupees(totalAmountPaise)}</span>
+                <span className="text-[#14B8A6]">{formatRupees(totalAmountPaise)}</span>
               </div>
 
               {/* Commit Button */}
               <button
                 onClick={handleCheckout}
                 disabled={isSubmitting || cart.length === 0}
-                className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-extrabold text-sm rounded-xl shadow-xl shadow-amber-500/20 transition flex items-center justify-center space-x-2 disabled:opacity-50 mt-3"
+                className="w-full py-3.5 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-extrabold text-sm rounded-xl shadow-sm transition flex items-center justify-center space-x-2 disabled:opacity-50 mt-3 min-h-[48px]"
               >
-                <Zap className="w-5 h-5 fill-black" />
+                <Zap className="w-5 h-5 fill-white text-white" />
                 <span>{isSubmitting ? 'COMMITTING BATCH...' : 'COMPLETE SALE & GENERATE BILL'}</span>
               </button>
             </div>
           </div>
 
           {/* Live Recent Transactions Feed Widget */}
-          <div className="glass-panel p-4 rounded-xl space-y-2">
-            <div className="text-xs font-semibold text-slate-400 flex items-center justify-between">
+          <div className="bg-[#273549] border border-[#374151] p-4 rounded-xl space-y-2 shadow-sm">
+            <div className="text-xs font-semibold text-[#9CA3AF] flex items-center justify-between">
               <span>LIVE RECENT COMMIT FEED</span>
-              <span className="text-[10px] text-amber-400 font-mono">REAL-TIME</span>
+              <span className="text-[10px] text-[#14B8A6] font-mono font-bold">REAL-TIME</span>
             </div>
             <div className="space-y-1.5 text-xs">
               {recentPurchases.map(p => (
-                <div key={p.id} className="flex items-center justify-between p-2 bg-dark-900/60 rounded-lg border border-slate-800/60">
+                <div key={p.id} className="flex items-center justify-between p-2 bg-[#1F2937] rounded-lg border border-[#374151]">
                   <div>
-                    <div className="font-semibold text-white font-mono">{p.billNumber}</div>
-                    <div className="text-[10px] text-slate-400">{p.customerName} ({p.paymentMethod})</div>
+                    <div className="font-semibold text-[#F3F4F6] font-mono">{p.billNumber}</div>
+                    <div className="text-[10px] text-[#9CA3AF]">{p.customerName} ({p.paymentMethod})</div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-amber-400 font-mono">{formatRupees(p.totalAmount)}</div>
+                    <div className="font-bold text-[#14B8A6] font-mono">{formatRupees(p.totalAmount)}</div>
                     {p.dueAmount > 0 ? (
-                      <span className="text-[9px] text-rose-400 font-mono">Due: {formatRupees(p.dueAmount)}</span>
+                      <span className="text-[9px] text-red-400 font-mono">Due: {formatRupees(p.dueAmount)}</span>
                     ) : (
                       <span className="text-[9px] text-emerald-400 font-mono">Paid</span>
                     )}
@@ -732,6 +741,24 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
         </div>
 
       </div>
+
+      {/* Mobile Sticky Checkout Bar */}
+      {cart.length > 0 && (
+        <div className="lg:hidden sticky bottom-14 left-0 right-0 z-30 bg-[#273549]/95 border border-[#374151] p-3 rounded-2xl shadow-xl backdrop-blur-md flex items-center justify-between mt-4">
+          <div>
+            <div className="text-[10px] text-[#9CA3AF] font-mono">{cart.length} items in cart</div>
+            <div className="text-base font-extrabold text-[#14B8A6] font-mono">{formatRupees(totalAmountPaise)}</div>
+          </div>
+          <button
+            onClick={handleCheckout}
+            disabled={isSubmitting}
+            className="px-5 py-3 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-extrabold text-xs rounded-xl shadow-md flex items-center space-x-1.5 min-h-[48px]"
+          >
+            <Zap className="w-4 h-4 fill-white text-white" />
+            <span>CHECKOUT NOW</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

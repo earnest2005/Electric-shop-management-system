@@ -11,36 +11,36 @@ export default function KeyboardShortcutsModal({ onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-dark-900 border border-slate-700/80 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-        <div className="p-4 border-b border-slate-800 bg-dark-800 flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-amber-400">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200 font-sans">
+      <div className="bg-[#273549] border border-[#374151] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div className="p-4 border-b border-[#374151] bg-[#1F2937] flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-[#14B8A6]">
             <Keyboard className="w-5 h-5" />
-            <h3 className="font-extrabold text-white text-base">Counter Keyboard Hotkeys</h3>
+            <h3 className="font-extrabold text-[#F3F4F6] text-base">Counter Keyboard Hotkeys</h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            className="p-1.5 text-[#9CA3AF] hover:text-[#F3F4F6] rounded-lg hover:bg-[#374151] transition"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-5 space-y-3">
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-[#9CA3AF]">
             Use these keyboard shortcuts on the POS billing screen for maximum cashier speed:
           </p>
           <div className="space-y-2">
             {shortcuts.map((s, idx) => (
-              <div key={idx} className="bg-dark-800/80 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+              <div key={idx} className="bg-[#1F2937] p-3 rounded-xl border border-[#374151] flex items-center justify-between text-xs">
                 <div>
-                  <div className="font-bold text-white flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <div className="font-bold text-[#F3F4F6] flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-[#14B8A6] fill-[#14B8A6]" />
                     <span>{s.action}</span>
                   </div>
-                  <div className="text-[11px] text-slate-400">{s.desc}</div>
+                  <div className="text-[11px] text-[#9CA3AF]">{s.desc}</div>
                 </div>
-                <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-lg font-mono font-bold text-xs shadow-sm">
+                <span className="bg-teal-500/10 text-teal-300 border border-teal-500/30 px-2.5 py-1 rounded-lg font-mono font-bold text-xs shadow-sm">
                   {s.key}
                 </span>
               </div>
@@ -48,10 +48,10 @@ export default function KeyboardShortcutsModal({ onClose }) {
           </div>
         </div>
 
-        <div className="p-4 border-t border-slate-800 bg-dark-800 text-right">
+        <div className="p-4 border-t border-[#374151] bg-[#1F2937] text-right">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl shadow-lg transition"
+            className="px-4 py-2 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-extrabold text-xs rounded-xl shadow-sm transition"
           >
             GOT IT
           </button>
@@ -60,3 +60,4 @@ export default function KeyboardShortcutsModal({ onClose }) {
     </div>
   );
 }
+

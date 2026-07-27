@@ -8,27 +8,33 @@ export default {
     extend: {
       colors: {
         brand: {
-          50: '#fffbeb',
-          100: '#fef3c7',
-          500: '#f59e0b',
-          600: '#d97706',
-          700: '#b45309',
+          50: '#f0fdf4',
+          100: '#ccfbf1',
+          500: '#14b8a6',
+          600: '#0d9488',
+          700: '#0f766e',
         },
         electric: {
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          glow: '#00f0ff'
+          400: '#2dd4bf',
+          500: '#14b8a6',
+          600: '#0d9488',
+          glow: 'rgba(20, 184, 166, 0.25)'
         },
         dark: {
-          900: '#0b0f19',
-          800: '#111827',
-          700: '#1f2937',
-          600: '#374151'
+          900: '#111827',
+          800: '#1F2937',
+          700: '#273549',
+          600: '#374151',
+          500: '#4B5563'
+        },
+        sidebar: {
+          bg: '#18212F',
+          hover: '#273549',
+          active: '#14B8A6'
         }
       },
       fontFamily: {
-        sans: ['Outfit', 'Inter', 'sans-serif'],
+        sans: ['Inter', 'Outfit', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace']
       }
     },

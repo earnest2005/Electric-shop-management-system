@@ -77,52 +77,52 @@ export default function SalesHistory({ onViewReceipt }) {
   const totalDuesInInvoices = purchases.reduce((sum, p) => sum + (p.dueAmount || 0), 0);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 font-sans selection:bg-teal-500 selection:text-white">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="font-extrabold text-white text-2xl font-sans flex items-center gap-2">
-            <Receipt className="w-7 h-7 text-amber-400" /> Transaction Logs & Sales Invoices
+          <h2 className="font-extrabold text-[#F3F4F6] text-2xl font-sans flex items-center gap-2">
+            <Receipt className="w-7 h-7 text-[#14B8A6]" /> Transaction Logs & Sales Invoices
           </h2>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">
+          <p className="text-xs text-[#9CA3AF] font-mono mt-0.5">
             Deterministic search and reprint center for all generated electrical billing invoices
           </p>
         </div>
 
         <button
           onClick={handleExportCSV}
-          className="flex items-center space-x-1.5 px-3.5 py-2 bg-dark-800 hover:bg-slate-800 text-slate-300 border border-slate-700 font-semibold text-xs rounded-xl transition self-start md:self-auto"
+          className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#273549] hover:bg-[#1F2937] text-[#F3F4F6] border border-[#374151] font-semibold text-xs rounded-xl transition shadow-sm self-start md:self-auto"
           title="Export Filtered Sales Report to CSV"
         >
-          <Download className="w-4 h-4 text-amber-400" />
+          <Download className="w-4 h-4 text-[#14B8A6]" />
           <span>Export Sales CSV</span>
         </button>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="glass-panel p-4 rounded-2xl">
-          <div className="text-xs text-slate-400">Total Billed Invoices</div>
-          <div className="text-2xl font-extrabold text-white font-mono mt-1">{purchases.length}</div>
+        <div className="bg-[#273549] p-4 rounded-2xl border border-[#374151] shadow-sm">
+          <div className="text-xs text-[#9CA3AF] font-mono font-semibold">Total Billed Invoices</div>
+          <div className="text-2xl font-extrabold text-[#F3F4F6] font-mono mt-1">{purchases.length}</div>
         </div>
 
-        <div className="glass-panel p-4 rounded-2xl">
-          <div className="text-xs text-slate-400">Gross Sales Value</div>
-          <div className="text-2xl font-extrabold text-amber-400 font-mono mt-1">
+        <div className="bg-[#273549] p-4 rounded-2xl border border-[#374151] shadow-sm">
+          <div className="text-xs text-[#9CA3AF] font-mono font-semibold">Gross Sales Value</div>
+          <div className="text-2xl font-extrabold text-[#14B8A6] font-mono mt-1">
             {formatRupees(totalSalesRevenue)}
           </div>
         </div>
 
-        <div className="glass-panel p-4 rounded-2xl">
-          <div className="text-xs text-slate-400">Uncollected Dues in Invoices</div>
-          <div className="text-2xl font-extrabold text-rose-400 font-mono mt-1">
+        <div className="bg-[#273549] p-4 rounded-2xl border border-[#374151] shadow-sm">
+          <div className="text-xs text-[#9CA3AF] font-mono font-semibold">Uncollected Dues in Invoices</div>
+          <div className="text-2xl font-extrabold text-red-400 font-mono mt-1">
             {formatRupees(totalDuesInInvoices)}
           </div>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="glass-panel p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="bg-[#273549] p-4 rounded-2xl border border-[#374151] shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
           {['All', 'Paid', 'Due'].map(st => (
             <button
@@ -130,8 +130,8 @@ export default function SalesHistory({ onViewReceipt }) {
               onClick={() => setStatusFilter(st)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 statusFilter === st
-                  ? 'bg-amber-500 text-black shadow-md'
-                  : 'bg-dark-800 text-slate-400 hover:text-white border border-slate-800'
+                  ? 'bg-[#14B8A6] text-white shadow-sm font-bold'
+                  : 'bg-[#1F2937] text-[#9CA3AF] hover:text-[#F3F4F6] border border-[#374151]'
               }`}
             >
               {st === 'All' ? 'All Invoices' : st === 'Paid' ? 'Fully Paid' : 'Pending Dues'}
@@ -141,7 +141,7 @@ export default function SalesHistory({ onViewReceipt }) {
           <select
             value={dateRange}
             onChange={e => setDateRange(e.target.value)}
-            className="glass-input px-3 py-1.5 rounded-xl text-xs font-mono font-bold text-amber-400 bg-dark-800"
+            className="glass-input px-3 py-1.5 rounded-xl text-xs font-mono font-bold text-[#14B8A6] bg-[#1F2937] border-[#374151]"
           >
             <option value="All Time">🗓️ All Time</option>
             <option value="Today">⚡ Today</option>
@@ -156,17 +156,18 @@ export default function SalesHistory({ onViewReceipt }) {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search by Invoice #, Customer, or Phone..."
-            className="w-full glass-input pl-10 pr-4 py-2 rounded-xl text-xs"
+            className="w-full glass-input pl-10 pr-4 py-2 rounded-xl text-xs border-[#374151] focus:border-[#14B8A6]"
           />
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+          <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-2.5" />
         </div>
       </div>
 
-      {/* Invoices Table */}
-      <div className="glass-panel rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Invoices Table (Desktop) & Touch Cards (Mobile) */}
+      <div className="bg-[#273549] rounded-2xl border border-[#374151] shadow-sm overflow-hidden">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-dark-800/80 text-slate-400 uppercase tracking-wider font-mono border-b border-slate-800">
+            <thead className="bg-[#1F2937] text-[#9CA3AF] uppercase tracking-wider font-mono border-b border-[#374151]">
               <tr>
                 <th className="px-6 py-3.5">Bill Number & Date</th>
                 <th className="px-6 py-3.5">Customer Info</th>
@@ -176,53 +177,53 @@ export default function SalesHistory({ onViewReceipt }) {
                 <th className="px-6 py-3.5 text-center">Receipt Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 font-sans">
+            <tbody className="divide-y divide-[#374151] font-sans text-[#F3F4F6]">
               {filteredPurchases.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-slate-500 font-mono">
+                  <td colSpan="6" className="px-6 py-8 text-center text-[#9CA3AF] font-mono">
                     No sales invoices found.
                   </td>
                 </tr>
               ) : (
                 filteredPurchases.map(p => (
-                  <tr key={p.id} className="hover:bg-dark-800/50 transition">
+                  <tr key={p.id} className="hover:bg-[#1F2937]/60 transition">
                     <td className="px-6 py-4">
-                      <div className="font-bold text-amber-400 font-mono text-sm">{p.billNumber}</div>
-                      <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
-                        <Calendar className="w-3 h-3 text-slate-500" />
+                      <div className="font-bold text-[#14B8A6] font-mono text-sm">{p.billNumber}</div>
+                      <div className="text-[11px] text-[#9CA3AF] font-mono flex items-center gap-1 mt-0.5">
+                        <Calendar className="w-3 h-3 text-[#9CA3AF]" />
                         {new Date(p.timestamp).toLocaleDateString('en-IN')} {new Date(p.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="font-bold text-white text-sm">{p.customerName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">+91 {p.customerPhone}</div>
+                      <div className="font-bold text-[#F3F4F6] text-sm">{p.customerName}</div>
+                      <div className="text-[11px] text-[#9CA3AF] font-mono">+91 {p.customerPhone}</div>
                     </td>
                     <td className="px-6 py-4 font-mono">
-                      <span className="bg-dark-800 border border-slate-700 px-2.5 py-1 rounded text-slate-300">
+                      <span className="bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 rounded text-teal-300 font-semibold">
                         {p.paymentMethod}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right font-mono font-bold text-white text-sm">
+                    <td className="px-6 py-4 text-right font-mono font-bold text-[#F3F4F6] text-sm">
                       {formatRupees(p.totalAmount)}
                     </td>
                     <td className="px-6 py-4 text-right font-mono">
                       <div className="text-emerald-400 font-semibold">Paid: {formatRupees(p.paidAmount)}</div>
                       {p.dueAmount > 0 && (
-                        <div className="text-rose-400 font-bold text-[11px]">Due: {formatRupees(p.dueAmount)}</div>
+                        <div className="text-red-400 font-bold text-[11px]">Due: {formatRupees(p.dueAmount)}</div>
                       )}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center space-x-2">
                         <button
                           onClick={() => onViewReceipt(p)}
-                          className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500 hover:text-black text-amber-400 font-semibold rounded-lg transition flex items-center space-x-1"
+                          className="px-3 py-1.5 bg-[#1F2937] hover:bg-[#374151] text-[#14B8A6] font-semibold rounded-lg border border-[#374151] transition flex items-center space-x-1 min-h-[36px]"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           <span>View Bill</span>
                         </button>
                         <button
                           onClick={() => handleDeleteInvoice(p)}
-                          className="p-1.5 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white rounded-lg transition border border-rose-500/20"
+                          className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition border border-red-500/30 min-w-[36px] min-h-[36px] flex items-center justify-center"
                           title="Delete Invoice from Firebase"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -234,6 +235,64 @@ export default function SalesHistory({ onViewReceipt }) {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Touch Cards View */}
+        <div className="md:hidden p-3 space-y-3">
+          {filteredPurchases.length === 0 ? (
+            <div className="py-8 text-center text-[#9CA3AF] font-mono text-xs">
+              No sales invoices found.
+            </div>
+          ) : (
+            filteredPurchases.map(p => (
+              <div key={p.id} className="bg-[#1F2937] border border-[#374151] rounded-xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="font-extrabold text-[#14B8A6] font-mono text-sm">{p.billNumber}</div>
+                  <span className="bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded text-[10px] font-mono text-teal-300 font-bold">
+                    {p.paymentMethod}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-start text-xs">
+                  <div>
+                    <h4 className="font-bold text-[#F3F4F6] text-sm">{p.customerName}</h4>
+                    <p className="text-[11px] text-[#14B8A6] font-mono">📱 {p.customerPhone}</p>
+                  </div>
+                  <div className="text-right text-[10px] text-[#9CA3AF] font-mono">
+                    {new Date(p.timestamp).toLocaleDateString('en-IN')}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-mono pt-2 border-t border-[#374151]">
+                  <div>
+                    <div className="text-[#F3F4F6] font-extrabold text-sm">{formatRupees(p.totalAmount)}</div>
+                    {p.dueAmount > 0 ? (
+                      <div className="text-red-400 text-[10px] font-bold">Due: {formatRupees(p.dueAmount)}</div>
+                    ) : (
+                      <div className="text-emerald-400 text-[10px]">Paid Full</div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => onViewReceipt(p)}
+                      className="px-3 py-2 bg-[#273549] hover:bg-[#374151] text-[#14B8A6] font-semibold rounded-xl border border-[#374151] transition text-xs flex items-center space-x-1 min-h-[44px]"
+                    >
+                      <Eye className="w-4 h-4" />
+                      <span>View</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteInvoice(p)}
+                      className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition border border-red-500/30 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      title="Delete Invoice"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
