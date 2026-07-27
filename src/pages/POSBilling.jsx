@@ -504,8 +504,8 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                 }}
                 onFocus={() => setIsSearchOpen(true)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="Search by Product Name, Code, Barcode, or Brand (F2)..."
-                className="w-full glass-input pl-11 pr-10 py-3 rounded-2xl text-sm font-mono font-bold min-h-[50px] border-[#374151] focus:border-[#14B8A6] shadow-md text-[#F3F4F6]"
+                placeholder="Search product by name, code or barcode..."
+                className="w-full glass-input pl-11 pr-10 py-3.5 rounded-2xl text-sm font-mono font-bold min-h-[52px] border-[#374151] focus:border-[#14B8A6] shadow-md text-[#F3F4F6]"
               />
               {searchQuery && (
                 <button
@@ -529,8 +529,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                 >
                   {matchingProducts.length === 0 ? (
                     <div className="p-6 text-center text-[#9CA3AF] font-mono text-xs space-y-1">
-                      <div className="text-sm font-bold text-[#F3F4F6]">No products found.</div>
-                      <div className="text-[11px] text-[#9CA3AF]">No items match "{searchQuery}". Check code or barcode.</div>
+                      <div className="text-sm font-bold text-[#F3F4F6]">No matching products found.</div>
                     </div>
                   ) : (
                     matchingProducts.map((p, idx) => {
@@ -538,7 +537,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                       const isOutOfStock = p.currentStock <= 0;
                       return (
                         <div
-                          key={p.barcode || p.id}
+                          key={p.barcode || p.id || idx}
                           onClick={() => handleSelectProduct(p)}
                           onMouseEnter={() => setHighlightedIndex(idx)}
                           className={`p-3.5 transition cursor-pointer flex items-center justify-between min-h-[56px] ${
@@ -552,21 +551,22 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                               <span className="font-bold text-sm text-[#F3F4F6]">
                                 {renderHighlightedText(p.productName, searchQuery)}
                               </span>
-                              <span className="text-[10px] font-mono font-bold bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded uppercase">
-                                {renderHighlightedText(p.brand, searchQuery)}
-                              </span>
+                              {p.brand && (
+                                <span className="text-[10px] font-mono font-bold bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded uppercase">
+                                  {renderHighlightedText(p.brand, searchQuery)}
+                                </span>
+                              )}
                             </div>
-                            <div className="flex items-center space-x-3 text-[11px] text-[#9CA3AF] font-mono">
-                              <span>Code: {renderHighlightedText(p.productCode || p.barcode, searchQuery)}</span>
-                              {p.category && <span>Category: {p.category}</span>}
+                            <div className="text-[11px] text-[#9CA3AF] font-mono">
+                              Code: <strong className="text-[#F3F4F6]">{renderHighlightedText(p.productCode || p.barcode || 'N/A', searchQuery)}</strong>
                             </div>
                           </div>
 
-                          <div className="text-right shrink-0 space-y-0.5">
-                            <div className="font-extrabold text-[#14B8A6] font-mono text-base">
-                              {formatRupees(p.basePrice)}
+                          <div className="text-right shrink-0 space-y-0.5 font-mono">
+                            <div className="font-extrabold text-[#14B8A6] text-base">
+                              Price: {formatRupees(p.basePrice)}
                             </div>
-                            <div className="text-[11px] font-mono">
+                            <div className="text-[11px]">
                               {isOutOfStock ? (
                                 <span className="text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">Out of Stock</span>
                               ) : (
@@ -602,64 +602,36 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
             </div>
           </div>
 
-          {/* Quick Inventory List Table (Replaces old Product Card Grid) */}
-          <div className="bg-[#273549] border border-[#374151] rounded-2xl overflow-hidden shadow-sm">
-            <div className="p-3 bg-[#1F2937] border-b border-[#374151] flex items-center justify-between text-xs font-mono text-[#9CA3AF]">
-              <span>INVENTORY DATABASE CATALOG</span>
-              <span className="text-[#14B8A6] font-bold">
-                {products.filter(p => selectedCategory === 'All' || p.category === selectedCategory).length} Items Available
+          {/* Billing Console Guide & Inventory Status (No Product Cards / No + Buttons) */}
+          <div className="bg-[#273549] border border-[#374151] p-5 rounded-2xl space-y-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-[#374151] pb-3">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-5 h-5 text-[#14B8A6]" />
+                <h3 className="font-bold text-[#F3F4F6] text-base">Fast Keyboard POS Console</h3>
+              </div>
+              <span className="text-xs bg-teal-500/10 text-teal-300 font-mono px-2.5 py-1 rounded border border-teal-500/30 font-bold">
+                {products.length} Items Live in Inventory
               </span>
             </div>
-            <div className="max-h-[460px] overflow-y-auto">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="bg-[#1F2937]/50 text-[#9CA3AF] font-mono border-b border-[#374151]">
-                    <th className="p-3">PRODUCT & BRAND</th>
-                    <th className="p-3 font-mono">CODE / BARCODE</th>
-                    <th className="p-3 text-right">SELLING PRICE</th>
-                    <th className="p-3 text-center">STOCK</th>
-                    <th className="p-3 text-center">ACTION</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#374151] font-mono text-[#F3F4F6]">
-                  {products
-                    .filter(p => selectedCategory === 'All' || p.category === selectedCategory)
-                    .slice(0, 50)
-                    .map(p => (
-                      <tr key={p.barcode || p.id} className="hover:bg-[#1F2937]/60 transition">
-                        <td className="p-3 font-sans">
-                          <div className="font-bold text-[#F3F4F6] text-xs">{p.productName}</div>
-                          <div className="text-[10px] text-[#14B8A6] font-mono">{p.brand}</div>
-                        </td>
-                        <td className="p-3 text-[#9CA3AF] text-[11px]">
-                          {p.productCode || p.barcode}
-                        </td>
-                        <td className="p-3 text-right font-extrabold text-[#14B8A6]">
-                          {formatRupees(p.basePrice)}
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            p.currentStock <= 0 
-                              ? 'bg-red-500/10 text-red-400 border border-red-500/30' 
-                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                          }`}>
-                            {p.currentStock}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          <button
-                            onClick={() => handleSelectProduct(p)}
-                            disabled={p.currentStock <= 0}
-                            className="px-3 py-1 bg-[#14B8A6] hover:bg-[#0D9488] disabled:opacity-40 text-white font-bold rounded-lg text-xs transition inline-flex items-center space-x-1 min-h-[32px]"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+              <div className="bg-[#1F2937] p-3 rounded-xl border border-[#374151] space-y-1">
+                <div className="text-[#9CA3AF]">SEARCH (F2)</div>
+                <div className="font-bold text-[#F3F4F6]">Type Name / Barcode</div>
+                <div className="text-[10px] text-teal-400">Press Enter to Add</div>
+              </div>
+
+              <div className="bg-[#1F2937] p-3 rounded-xl border border-[#374151] space-y-1">
+                <div className="text-[#9CA3AF]">NAVIGATE</div>
+                <div className="font-bold text-[#F3F4F6]">↑ & ↓ Arrow Keys</div>
+                <div className="text-[10px] text-teal-400">Esc to Close Dropdown</div>
+              </div>
+
+              <div className="bg-[#1F2937] p-3 rounded-xl border border-[#374151] space-y-1">
+                <div className="text-[#9CA3AF]">CUSTOMER (F4)</div>
+                <div className="font-bold text-[#F3F4F6]">Mobile Lookup</div>
+                <div className="text-[10px] text-teal-400">Link Customer Ledger</div>
+              </div>
             </div>
           </div>
         </div>
