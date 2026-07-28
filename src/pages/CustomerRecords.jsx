@@ -6,7 +6,7 @@ import {
 import { formatRupees, formatNumberIN } from '../utils/currency';
 import { getCustomers, getPurchases } from '../services/db';
 import { exportCustomerLedgerCSV, exportToCSV } from '../utils/exporter';
-import ReceiptModal from '../components/ReceiptModal';
+import AdminInvoiceModal from '../components/AdminInvoiceModal';
 
 export default function CustomerRecords() {
   const [customers, setCustomers] = useState([]);
@@ -443,7 +443,7 @@ export default function CustomerRecords() {
 
       {/* Invoice Receipt Modal */}
       {selectedInvoice && (
-        <ReceiptModal
+        <AdminInvoiceModal
           invoice={selectedInvoice}
           onClose={() => setSelectedInvoice(null)}
         />

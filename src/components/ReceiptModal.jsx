@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, CheckCircle2, Zap, Phone, MapPin, User, AlertTriangle } from 'lucide-react';
+import { X, Printer, CheckCircle2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { formatRupees, formatNumberIN } from '../utils/currency';
+import { formatNumberIN } from '../utils/currency';
 import { getShopDetails, DEFAULT_SHOP_DETAILS } from '../services/db';
 import { printReceiptHtml } from '../utils/print';
 
@@ -16,7 +16,7 @@ export default function ReceiptModal({ invoice, onClose }) {
     }
     loadShop();
 
-    // Prevent accidental instant closure (from Enter key press or double click) for 400ms after opening
+    // Prevent accidental instant closure for 400ms after opening
     const guardTimer = setTimeout(() => {
       setCanClose(true);
     }, 400);
@@ -29,7 +29,7 @@ export default function ReceiptModal({ invoice, onClose }) {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    // Trigger Celebration Confetti Papers Burst on Modal Pop-Up
+    // Trigger Celebration Confetti Burst on Modal Pop-Up
     if (invoice) {
       setTimeout(() => {
         try {
@@ -82,7 +82,7 @@ export default function ReceiptModal({ invoice, onClose }) {
 
   const custName = invoice.customer?.name || invoice.customerName || 'Walk-in Customer';
   const custPhone = invoice.customer?.phone || invoice.customerPhone || 'N/A';
-  const custAddress = invoice.customer?.address || invoice.customerAddress || '';
+  const custAddress = invoice.customer?.address || invoice.customerAddress || 'Local Store';
 
   const subtotal = invoice.subtotal || 0;
   const taxAmount = invoice.taxAmount ?? invoice.tax ?? 0;
@@ -92,17 +92,24 @@ export default function ReceiptModal({ invoice, onClose }) {
   const dueAmount = invoice.dueAmount || 0;
   const items = invoice.items || [];
 
+  const cashReceived = invoice.cashReceived;
+  const changeReturned = invoice.changeReturned;
+
+  const formattedDate = invoice.timestamp 
+    ? new Date(invoice.timestamp).toLocaleDateString('en-GB')
+    : new Date().toLocaleDateString('en-GB');
+
   return (
     <div 
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200 print:bg-transparent print:p-0 print:static print:block font-sans"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200 print:bg-transparent print:p-0 print:static print:block font-mono"
       onClick={(e) => e.stopPropagation()}
     >
       <div 
-        className="bg-[#273549] border border-[#374151] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh] print:max-h-none print:overflow-visible print:border-none print:shadow-none print:bg-white print:w-full print:block"
+        className="bg-[#273549] border border-[#374151] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[92vh] print:max-h-none print:overflow-visible print:border-none print:shadow-none print:bg-white print:w-full print:block"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Top Action Bar (Hidden in Print) */}
-        <div className="p-4 border-b border-[#374151] bg-[#1F2937] flex items-center justify-between print:hidden">
+        <div className="p-4 border-b border-[#374151] bg-[#1F2937] flex items-center justify-between print:hidden font-sans">
           <div className="flex items-center space-x-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-400" />
             <div>
@@ -117,7 +124,7 @@ export default function ReceiptModal({ invoice, onClose }) {
               className="flex items-center space-x-1.5 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-sm"
             >
               <Printer className="w-4 h-4" />
-              <span>PRINT INVOICE</span>
+              <span>PRINT RECEIPT</span>
             </button>
             <button
               type="button"
@@ -129,135 +136,175 @@ export default function ReceiptModal({ invoice, onClose }) {
           </div>
         </div>
 
-        {/* Printable Receipt Body */}
-        <div className="p-6 overflow-y-auto font-sans bg-white text-slate-900 print:p-0 print:overflow-visible print:bg-white print:text-black" id="printable-receipt">
-          {/* Shop Brand Header */}
-          <div className="text-center pb-4 border-b border-dashed border-slate-300 space-y-1">
-            <div className="flex items-center justify-center space-x-2 text-blue-600 font-extrabold text-xl">
-              <Zap className="w-6 h-6 fill-blue-600" />
-              <span>{shopInfo.shopName || 'VOLT ELECTRICALS'}</span>
+        {/* Printable Thermal Receipt (80mm / 58mm target) */}
+        <div 
+          className="p-4 bg-white text-black font-mono text-[11px] leading-tight overflow-y-auto print:p-0 print:overflow-visible print:bg-white print:text-black select-text" 
+          id="printable-receipt"
+          style={{ fontFamily: "'Courier New', Courier, monospace" }}
+        >
+          {/* HEADER (Centered) */}
+          <div className="text-center pb-2 border-b border-black space-y-1">
+            <div className="font-extrabold text-base tracking-tight uppercase">
+              {shopInfo.shopName || 'VOLT ELECTRICALS'}
             </div>
-            {shopInfo.tagline && (
-              <p className="text-xs text-slate-600 font-medium">{shopInfo.tagline}</p>
-            )}
-            <div className="text-[11px] text-slate-500 flex flex-wrap items-center justify-center gap-2 pt-1">
-              {shopInfo.address && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-blue-600" /> {shopInfo.address}
-                </span>
-              )}
-              {shopInfo.phone && (
-                <span className="flex items-center gap-1">
-                  <Phone className="w-3 h-3 text-blue-600" /> {shopInfo.phone}
-                </span>
-              )}
+            <div className="text-[11px] font-bold">
+              {shopInfo.tagline || 'Power, Lighting & Hardware Store'}
             </div>
-            {shopInfo.gstin && (
-              <p className="text-[10px] text-slate-500 font-mono">GSTIN: {shopInfo.gstin}</p>
-            )}
-          </div>
-
-          {/* Customer & Invoice Meta info */}
-          <div className="py-3 border-b border-dashed border-slate-300 text-xs space-y-1.5">
-            <div className="flex justify-between text-slate-600 font-mono">
-              <span>Bill No: <strong className="text-slate-900">{invoice.billNumber}</strong></span>
-              <span>Date: {invoice.timestamp ? new Date(invoice.timestamp).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}</span>
+            <div className="text-[10px] whitespace-pre-line leading-tight">
+              {shopInfo.address || 'Main Market Road,\nElectrical Substation,\nSector 4'}
             </div>
-            <div className="flex justify-between text-slate-600">
-              <span className="flex items-center gap-1">
-                <User className="w-3.5 h-3.5 text-blue-600" /> Customer: <strong className="text-slate-900">{custName}</strong>
-              </span>
-              <span className="font-mono">Mob: {custPhone}</span>
-            </div>
-            {custAddress && (
-              <div className="text-[11px] text-slate-500 truncate">
-                Address: {custAddress}
-              </div>
-            )}
-            <div className="flex justify-between text-[11px] text-slate-500 pt-1">
-              <span>Payment Mode: <strong className="text-blue-600 font-mono">{invoice.paymentMethod || 'CASH'}</strong></span>
-              <span>Billed By: <strong className="text-slate-900 font-mono">{invoice.staffName || invoice.staff || 'Staff'}</strong></span>
+            <div className="text-[10px] pt-0.5 space-y-0.5">
+              <div>Phone : {shopInfo.phone || '+91 9876543210'}</div>
+              <div>GSTIN : {shopInfo.gstin || '07AAAAA0000A1Z5'}</div>
             </div>
           </div>
 
-          {/* Itemized Table */}
-          <table className="w-full text-xs my-3">
-            <thead>
-              <tr className="text-slate-500 border-b border-slate-200 text-left font-mono">
-                <th className="py-1.5">ITEM DESCRIPTION</th>
-                <th className="text-center py-1.5">QTY</th>
-                <th className="text-right py-1.5">RATE</th>
-                <th className="text-right py-1.5">TOTAL</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-mono text-slate-700">
-              {items.map((item, idx) => (
-                <tr key={idx} className="py-1.5">
-                  <td className="py-2 pr-2 font-sans font-medium text-slate-900">{item.productName}</td>
-                  <td className="text-center py-2 text-blue-600 font-bold">{item.qty}</td>
-                  <td className="text-right py-2">₹{formatNumberIN(item.unitPrice || item.basePrice || 0)}</td>
-                  <td className="text-right py-2 font-bold text-slate-900">
-                    ₹{formatNumberIN(item.total || ((item.unitPrice || item.basePrice || 0) * item.qty))}
-                  </td>
+          {/* INVOICE DETAILS (Two-Column Layout) */}
+          <div className="py-2 border-b border-black text-[11px] space-y-1">
+            <div className="flex justify-between">
+              <span>Invoice No : <strong>{invoice.billNumber}</strong></span>
+              <span>Date : <strong>{formattedDate}</strong></span>
+            </div>
+            <div className="flex justify-between">
+              <span>Cashier    : <strong>{invoice.staffName || invoice.staff || 'Staff'}</strong></span>
+              <span>Payment : <strong>{invoice.paymentMethod || 'Cash'}</strong></span>
+            </div>
+          </div>
+
+          {/* CUSTOMER DETAILS */}
+          <div className="py-2 border-b border-black text-[11px] space-y-1">
+            <div>Customer : <strong>{custName}</strong></div>
+            <div>Mobile   : <strong>{custPhone}</strong></div>
+            <div>Address  : <strong>{custAddress}</strong></div>
+          </div>
+
+          {/* ITEM TABLE (Fixed Width Columns & Exact Alignment) */}
+          <div className="py-2 border-b border-black">
+            <table className="w-full text-[11px] border-collapse font-mono">
+              <thead>
+                <tr className="border-b border-black text-left">
+                  <th className="py-1 text-left" style={{ width: '45%' }}>ITEM</th>
+                  <th className="py-1 text-center" style={{ width: '12%' }}>QTY</th>
+                  <th className="py-1 text-right" style={{ width: '21%' }}>RATE</th>
+                  <th className="py-1 text-right" style={{ width: '22%' }}>TOTAL</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-300">
+                {items.map((item, idx) => {
+                  const rate = item.unitPrice || item.basePrice || 0;
+                  const lineTotal = item.total || (rate * item.qty);
+                  return (
+                    <tr key={idx} className="align-top">
+                      <td className="py-1 pr-1 break-words font-medium">
+                        {item.productName}
+                      </td>
+                      <td className="py-1 text-center font-bold">
+                        {item.qty}
+                      </td>
+                      <td className="py-1 text-right whitespace-nowrap">
+                        ₹{formatNumberIN(rate)}
+                      </td>
+                      <td className="py-1 text-right font-bold whitespace-nowrap">
+                        ₹{formatNumberIN(lineTotal)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-          {/* Financial Totals */}
-          <div className="py-3 border-t border-b border-dashed border-slate-300 space-y-1.5 text-xs font-mono">
-            <div className="flex justify-between text-slate-600">
-              <span>Subtotal:</span>
-              <span>{formatRupees(subtotal)}</span>
+          {/* TOTALS (Right Aligned Amounts) */}
+          <div className="py-2 border-b border-black text-[11px] space-y-1 font-mono">
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>₹{formatNumberIN(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-slate-600">
-              <span>GST (Included {shopInfo.defaultTaxPercent || 18}%):</span>
-              <span>{formatRupees(taxAmount)}</span>
-            </div>
-            {discountAmount > 0 && (
-              <div className="flex justify-between text-emerald-600 font-bold">
-                <span>Discount Applied:</span>
-                <span>-{formatRupees(discountAmount)}</span>
+
+            {taxAmount > 0 && (
+              <div className="flex justify-between">
+                <span>GST ({shopInfo.defaultTaxPercent || 18}%)</span>
+                <span>₹{formatNumberIN(taxAmount)}</span>
               </div>
             )}
-            <div className="flex justify-between text-base font-extrabold text-slate-900 pt-1.5 border-t border-slate-200">
-              <span>NET TOTAL AMOUNT:</span>
-              <span className="text-blue-600">{formatRupees(totalAmount)}</span>
-            </div>
-            <div className="flex justify-between text-slate-700 pt-1">
-              <span>Amount Paid Now:</span>
-              <span className="text-emerald-600 font-bold">{formatRupees(paidAmount)}</span>
+
+            {discountAmount > 0 && (
+              <div className="flex justify-between">
+                <span>Discount</span>
+                <span>-₹{formatNumberIN(discountAmount)}</span>
+              </div>
+            )}
+
+            <div className="border-t border-black pt-1 flex justify-between text-xs font-black">
+              <span>NET TOTAL</span>
+              <span>₹{formatNumberIN(totalAmount)}</span>
             </div>
 
-            {/* Outstanding Due Highlight */}
-            {dueAmount > 0 ? (
-              <div className="flex justify-between text-rose-800 font-bold bg-rose-50 p-2.5 rounded-xl border border-rose-200 mt-2">
-                <span className="flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" /> Pending Due Balance:
-                </span>
-                <span className="text-rose-600">{formatRupees(dueAmount)}</span>
+            <div className="flex justify-between">
+              <span>Amount Paid</span>
+              <span>₹{formatNumberIN(paidAmount)}</span>
+            </div>
+
+            <div className="flex justify-between">
+              <span>Balance Due</span>
+              <span>₹{formatNumberIN(dueAmount)}</span>
+            </div>
+
+            <div className="pt-1 text-center">
+              {dueAmount <= 0 ? (
+                <div className="py-1 font-bold border border-black rounded text-center">
+                  ✓ FULLY PAID
+                </div>
+              ) : (
+                <div className="py-1 font-bold border border-black rounded text-center">
+                  Pending Due : ₹{formatNumberIN(dueAmount)}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* PAYMENT BREAKDOWN */}
+          <div className="py-2 border-b border-black text-[11px] space-y-1 font-mono">
+            <div className="flex justify-between">
+              <span>Payment Mode :</span>
+              <strong>{invoice.paymentMethod || 'Cash'}</strong>
+            </div>
+
+            {cashReceived !== undefined && cashReceived !== null && cashReceived > 0 && (
+              <div className="flex justify-between">
+                <span>Cash Received :</span>
+                <strong>₹{formatNumberIN(cashReceived)}</strong>
               </div>
-            ) : (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-center text-xs font-sans font-bold p-2 rounded-xl mt-2">
-                ✓ FULLY PAID — NO DUES PENDING
+            )}
+
+            {changeReturned !== undefined && changeReturned > 0 && (
+              <div className="flex justify-between">
+                <span>Change Return :</span>
+                <strong>₹{formatNumberIN(changeReturned)}</strong>
               </div>
             )}
           </div>
 
-          {/* Receipt Footer */}
-          <div className="text-center pt-4 space-y-2">
-            <div className="font-mono text-[10px] tracking-widest text-slate-500 bg-slate-50 p-2 rounded-xl border border-slate-200">
-              ||| |||| ||||| || |||||| | ||||| |||| ||
-              <div className="mt-0.5 text-[9px]">{invoice.billNumber}</div>
+          {/* FOOTER & BARCODE */}
+          <div className="pt-2 text-center font-mono space-y-1.5">
+            <div className="text-[11px] font-bold">Thank you for shopping with us!</div>
+            <div className="text-[10px]">Goods once sold cannot be returned.</div>
+            <div className="text-[11px] font-bold">Visit Again</div>
+
+            {/* BARCODE */}
+            <div className="pt-2">
+              <div className="text-xs tracking-widest font-bold">
+                ||| |||| ||||| || |||||| | ||||| |||| ||
+              </div>
+              <div className="text-[10px] font-bold mt-0.5">
+                {invoice.billNumber}
+              </div>
             </div>
-            <p className="text-[11px] text-slate-500 italic">
-              {shopInfo.invoiceFooterNote || "Thank you for shopping at Volt Electricals! Warranty valid against invoice."}
-            </p>
           </div>
         </div>
 
-        {/* Modal Bottom Action Footer */}
-        <div className="p-4 border-t border-[#374151] bg-[#1F2937] flex justify-end space-x-2 print:hidden">
+        {/* Modal Bottom Action Footer (Hidden in Print) */}
+        <div className="p-4 border-t border-[#374151] bg-[#1F2937] flex justify-end space-x-2 print:hidden font-sans">
           <button
             type="button"
             onClick={handleSafeClose}

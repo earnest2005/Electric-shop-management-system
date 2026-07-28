@@ -291,6 +291,18 @@ export async function saveProduct(product) {
   return productData;
 }
 
+export async function deleteProduct(barcodeOrId) {
+  const products = getLocalCache('products', SEED_PRODUCTS);
+  const updated = products.filter(p => p.barcode !== barcodeOrId && p.id !== barcodeOrId);
+  setLocalCache('products', updated);
+
+  deleteDoc(doc(db, 'products', barcodeOrId))
+    .then(() => console.log("🔥 Direct Firestore product deleted:", barcodeOrId))
+    .catch(e => console.error("❌ Firestore deleteProduct error:", e));
+
+  return true;
+}
+
 // ------------------------------------------------------------------
 // CUSTOMERS
 // ------------------------------------------------------------------
@@ -367,11 +379,42 @@ export async function saveCustomer(cust) {
 // ------------------------------------------------------------------
 // INVOICE / SALES BILLING
 // ------------------------------------------------------------------
+export async function generateNextInvoiceNumber() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const datePrefix = `INV-${yyyy}${mm}${dd}-`;
+
+  const purchases = await getPurchases();
+  let maxSeq = 0;
+
+  const storedSeqKey = `volt_invoice_seq_${yyyy}${mm}${dd}`;
+  const storedSeq = parseInt(localStorage.getItem(storedSeqKey) || '0', 10);
+  maxSeq = Math.max(maxSeq, storedSeq);
+
+  purchases.forEach(p => {
+    const bNo = p.billNumber || p.id || '';
+    if (bNo.startsWith(datePrefix)) {
+      const parts = bNo.split('-');
+      const seqStr = parts[parts.length - 1];
+      const seqNum = parseInt(seqStr, 10);
+      if (!isNaN(seqNum) && seqNum > maxSeq) {
+        maxSeq = seqNum;
+      }
+    }
+  });
+
+  const nextSeq = maxSeq + 1;
+  localStorage.setItem(storedSeqKey, nextSeq.toString());
+  return `${datePrefix}${String(nextSeq).padStart(4, '0')}`;
+}
+
 export async function createInvoice(sale) {
   const rawPhone = (sale.customer && sale.customer.phone) ? sale.customer.phone.replace(/\D/g, '') : '';
   const cleanPhone = rawPhone || `CUST-${Date.now()}`;
   const timestamp = new Date().toISOString();
-  const billNumber = sale.billNumber || `INV-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+  const billNumber = sale.billNumber || await generateNextInvoiceNumber();
 
   console.log("📄 Creating invoice:", billNumber, "for customer:", cleanPhone);
 

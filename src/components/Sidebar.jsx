@@ -20,6 +20,7 @@ export default function Sidebar({ currentView, setCurrentView, isMobileOpen, set
 
   const adminNavItems = [
     { id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'inventory', label: 'Inventory', icon: Package },
     { id: 'customer-records', label: 'Customer Records', icon: Users },
     { id: 'bill-records', label: 'Bill Records', icon: FileText },
     { id: 'offers', label: 'Offers & Promotions', icon: Tag },

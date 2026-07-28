@@ -6,6 +6,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LockScreen from './components/LockScreen';
 import ReceiptModal from './components/ReceiptModal';
+import AdminInvoiceModal from './components/AdminInvoiceModal';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import DraftInvoicesModal from './components/DraftInvoicesModal';
 
@@ -179,8 +180,10 @@ function MainAppContent() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [isAuthenticated, userRole]);
 
+  const [inventoryInitialFilter, setInventoryInitialFilter] = useState('all');
+
   // Handle protected navigation with role checks & URL updates
-  const handleNavigate = (requestedView) => {
+  const handleNavigate = (requestedView, extraParam = 'all') => {
     if (!isAuthenticated) return;
 
     if (userRole === 'staff' && adminRestrictedViews.includes(requestedView)) {
@@ -189,6 +192,10 @@ function MainAppContent() {
       window.history.pushState(null, '', '/staff');
       setIsMobileOpen(false);
       return;
+    }
+
+    if (requestedView === 'inventory') {
+      setInventoryInitialFilter(typeof extraParam === 'string' ? extraParam : 'all');
     }
 
     setCurrentView(requestedView);
@@ -322,7 +329,7 @@ function MainAppContent() {
             )}
 
             {currentView === 'inventory' && (
-              <InventoryMaster />
+              <InventoryMaster initialFilter={inventoryInitialFilter} />
             )}
 
             {currentView === 'history' && (
@@ -338,10 +345,17 @@ function MainAppContent() {
 
       {/* Printable Thermal Receipt Modal */}
       {selectedInvoice && (
-        <ReceiptModal
-          invoice={selectedInvoice}
-          onClose={() => setSelectedInvoice(null)}
-        />
+        userRole === 'admin' ? (
+          <AdminInvoiceModal
+            invoice={selectedInvoice}
+            onClose={() => setSelectedInvoice(null)}
+          />
+        ) : (
+          <ReceiptModal
+            invoice={selectedInvoice}
+            onClose={() => setSelectedInvoice(null)}
+          />
+        )
       )}
 
       {/* Counter Keyboard Hotkeys Modal */}

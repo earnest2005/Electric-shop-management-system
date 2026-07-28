@@ -1,26 +1,34 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  Barcode, Search, ShoppingCart, Plus, Minus, Trash2, User, Phone, 
-  CreditCard, DollarSign, QrCode, AlertTriangle, CheckCircle2, Zap, 
-  Tag, ChevronRight, FileText, ArrowRight, PauseCircle, RotateCcw, Clock, Sparkles
+  Search, ShoppingCart, Trash2, User, UserCheck, UserPlus,
+  AlertTriangle, Zap, FileText, PauseCircle, RotateCcw, Printer, Clock, FileCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { formatRupees, rupeesToPaise, paiseToRupees, formatNumberIN } from '../utils/currency';
-import { getProducts, searchCustomerByPhone, processSaleBatch, getPurchases, getCustomers, getOffers } from '../services/db';
+import { getProducts, processSaleBatch, getPurchases, getCustomers, getOffers, generateNextInvoiceNumber } from '../services/db';
 import { useAlert } from '../context/AlertContext';
 import { useAuth } from '../context/AuthContext';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { printReceiptHtml } from '../utils/print';
 
 export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   const { toast } = useAlert();
   const { user, userRole } = useAuth();
   const [products, setProducts] = useState([]);
   const [activeOffers, setActiveOffers] = useState([]);
-  const [selectedOfferId, setSelectedOfferId] = useState('');
+
+  // Session Unique Fixed Invoice Number State
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   
+  // Real-time Top Clock
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Product Search & Autocomplete State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   
@@ -38,17 +46,34 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
 
   // Payment state
-  const [paymentMethod, setPaymentMethod] = useState('UPI'); // Cash, UPI, Card, Credit/Due, Split
-  const [paidRupees, setPaidRupees] = useState(''); // Amount paid by customer in Rupees string
-  const [cashTenderedRupees, setCashTenderedRupees] = useState(''); // Cash given by customer
+  const [paymentMethod, setPaymentMethod] = useState('UPI'); // Cash, UPI, Card, Credit/Due
+  const [paidRupees, setPaidRupees] = useState('');
 
   // Processing state
   const [recentPurchases, setRecentPurchases] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // DOM Refs for Fast Keyboard Navigation
   const productSearchRef = useRef(null);
+  const qtyInputRefs = useRef({});
   const customerPhoneRef = useRef(null);
+  const customerNameRef = useRef(null);
+  const paymentMethodRef = useRef(null);
+  const discountRef = useRef(null);
+  const paidAmountRef = useRef(null);
+  const completeSaleBtnRef = useRef(null);
+  const printBtnRef = useRef(null);
   const isSubmittingRef = useRef(false);
+
+  // Initialize Fixed Unique Invoice Number on Mount
+  const fetchNextInvoiceNumber = async () => {
+    const num = await generateNextInvoiceNumber();
+    setInvoiceNumber(num);
+  };
+
+  useEffect(() => {
+    fetchNextInvoiceNumber();
+  }, []);
 
   // Focus product search on initial load
   useEffect(() => {
@@ -115,26 +140,22 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   const searchTrimmed = searchQuery.trim();
   const searchLower = searchTrimmed.toLowerCase();
 
-  const matchingProducts = React.useMemo(() => {
+  const matchingProducts = useMemo(() => {
     if (!searchLower) return [];
     return products.filter(p => {
       const pName = (p.productName || '').toLowerCase();
       const pBrand = (p.brand || '').toLowerCase();
       const pCode = (p.productCode || p.barcode || '').toLowerCase();
       const pBarcode = (p.barcode || '').toLowerCase();
-      const pCat = (p.category || '').toLowerCase();
 
-      const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
-      const matchSearch = 
+      return (
         pName.includes(searchLower) ||
         pBrand.includes(searchLower) ||
         pCode.includes(searchLower) ||
-        pBarcode.includes(searchLower) ||
-        pCat.includes(searchLower);
-
-      return matchCat && matchSearch;
+        pBarcode.includes(searchLower)
+      );
     }).slice(0, 15);
-  }, [products, searchLower, selectedCategory]);
+  }, [products, searchLower]);
 
   useEffect(() => {
     setHighlightedIndex(0);
@@ -149,9 +170,15 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     setSearchQuery('');
     setIsSearchOpen(false);
     setHighlightedIndex(0);
+
+    // Immediately move focus to Quantity field for newly added product!
     setTimeout(() => {
-      if (productSearchRef.current) productSearchRef.current.focus();
-    }, 30);
+      const qtyInput = qtyInputRefs.current[product.barcode];
+      if (qtyInput) {
+        qtyInput.focus();
+        qtyInput.select();
+      }
+    }, 50);
   };
 
   const handleSearchKeyDown = (e) => {
@@ -181,6 +208,12 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
         } else {
           toast.error(`No product found matching "${searchTrimmed}"`, "Item Not Found");
         }
+      }
+    } else if (e.key === 'Tab' && !searchTrimmed) {
+      // Tab from empty Product Search jumps focus to Customer Mobile Number
+      e.preventDefault();
+      if (customerPhoneRef.current) {
+        customerPhoneRef.current.focus();
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -235,6 +268,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     setCustomerAddress(cust.address || '');
     setExistingCustomer(cust);
     setShowCustomerSuggestions(false);
+    if (customerNameRef.current) customerNameRef.current.focus();
   };
 
   // Cart operations
@@ -266,35 +300,36 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
             taxPercent: product.taxPercent || 18,
             currentStock: product.currentStock,
             qty: 1,
+            discountPaise: 0,
             total: product.basePrice // in Paise
           }
         ];
       }
     });
-
-    setTimeout(() => {
-      if (productSearchRef.current) productSearchRef.current.focus();
-    }, 50);
   };
 
-  const updateCartQty = (barcode, delta) => {
+  const updateCartQtyExact = (barcode, newQty) => {
+    const parsed = parseInt(newQty, 10);
+    if (isNaN(parsed) || parsed <= 0) return;
     setCart(prev => {
       return prev.map(item => {
         if (item.barcode === barcode) {
-          const newQty = item.qty + delta;
-          if (newQty <= 0) return null;
-          if (newQty > item.currentStock) {
+          if (parsed > item.currentStock) {
             toast.warning(`Stock limit reached (${item.currentStock})`, "Stock Limit");
-            return item;
+            return {
+              ...item,
+              qty: item.currentStock,
+              total: item.currentStock * item.basePrice - (item.discountPaise || 0)
+            };
           }
           return {
             ...item,
-            qty: newQty,
-            total: newQty * item.basePrice
+            qty: parsed,
+            total: parsed * item.basePrice - (item.discountPaise || 0)
           };
         }
         return item;
-      }).filter(Boolean);
+      });
     });
   };
 
@@ -304,6 +339,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
       setLastRemovedItem(itemToRemove);
     }
     setCart(prev => prev.filter(item => item.barcode !== barcode));
+    if (productSearchRef.current) productSearchRef.current.focus();
   };
 
   const undoRemoveItem = () => {
@@ -321,6 +357,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     }
     const draft = {
       id: 'DRAFT-' + Date.now(),
+      billNumber: invoiceNumber,
       customerPhone,
       customerName,
       customerAddress,
@@ -339,11 +376,57 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
       setCustomerName('');
       setCustomerAddress('');
       setPaidRupees('');
+      setDiscountRupees('');
       setExistingCustomer(null);
+
+      // Generate next unique invoice number for next session
+      fetchNextInvoiceNumber();
+
       toast.success("Active bill saved to Held Drafts!", "Bill Held");
+      if (productSearchRef.current) productSearchRef.current.focus();
     } catch (e) {
       toast.error("Failed to hold bill draft", "Draft Error");
     }
+  };
+
+  // Estimate Quotation Printer
+  const handleSaveEstimate = () => {
+    if (cart.length === 0) {
+      toast.warning("Cannot generate estimate for an empty cart!", "Empty Cart");
+      return;
+    }
+    const estimateHtml = renderEstimatePrintHtml({
+      billNumber: invoiceNumber,
+      customerName: customerName || 'Valued Customer',
+      customerPhone,
+      cart,
+      subtotalPaise,
+      discountPaise,
+      taxPaise,
+      totalAmountPaise
+    });
+    printReceiptHtml(estimateHtml);
+    toast.success("Estimate / Quotation generated", "Estimate Ready");
+  };
+
+  // Quick Print Receipt Preview
+  const handlePrintReceipt = () => {
+    if (cart.length === 0) {
+      toast.warning("No items in cart to print preview!", "Empty Cart");
+      return;
+    }
+    const receiptHtml = renderEstimatePrintHtml({
+      billNumber: invoiceNumber,
+      customerName: customerName || 'Valued Customer',
+      customerPhone,
+      cart,
+      subtotalPaise,
+      discountPaise,
+      taxPaise,
+      totalAmountPaise,
+      paymentMethod
+    });
+    printReceiptHtml(receiptHtml);
   };
 
   // Financial calculations in Paise
@@ -376,14 +459,17 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
 
     if (cart.length === 0) {
       toast.warning("Cart is empty! Add products first.", "Empty Cart");
+      if (productSearchRef.current) productSearchRef.current.focus();
       return;
     }
     if (!customerPhone.trim() || customerPhone.replace(/\D/g, '').length < 10) {
       toast.error("Please enter a valid 10-digit Customer Mobile Number.", "Invalid Input");
+      if (customerPhoneRef.current) customerPhoneRef.current.focus();
       return;
     }
     if (!customerName.trim()) {
       toast.error("Please enter Customer Name.", "Invalid Input");
+      if (customerNameRef.current) customerNameRef.current.focus();
       return;
     }
 
@@ -393,6 +479,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     try {
       const staffUsername = user?.username || userRole || 'staff';
       const saleData = {
+        billNumber: invoiceNumber, // Use fixed unique session invoice number!
         customer: {
           phone: customerPhone.replace(/\D/g, ''),
           name: customerName.trim(),
@@ -423,7 +510,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
 
       toast.success(`Invoice ${completedRecord.billNumber} created successfully!`, "Sale Completed");
 
-      // Clear Form & Open Receipt
+      // Reset Billing Form & Customer Details
       setCart([]);
       setDiscountRupees('');
       setCustomerPhone('');
@@ -432,9 +519,17 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
       setPaidRupees('');
       setExistingCustomer(null);
 
+      // Generate NEXT Unique Invoice Number for the next bill session
+      await fetchNextInvoiceNumber();
+
       if (onCompleteSale) {
         onCompleteSale(completedRecord);
       }
+
+      // Automatically place cursor back into Product Search field for next bill transaction
+      setTimeout(() => {
+        if (productSearchRef.current) productSearchRef.current.focus();
+      }, 100);
     } catch (err) {
       console.error("Sale commit failed:", err);
       toast.error("Failed to complete transaction: " + err.message, "Transaction Error");
@@ -444,96 +539,141 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     }
   };
 
-  // Categories list
-  const categories = ['All', 'Wires & Cables', 'Switches & Sockets', 'Switchgear & MCBs', 'Fans & Appliances', 'Lighting', 'Conduits & Fittings', 'Tools & Accessories'];
+  const renderEstimatePrintHtml = ({ billNumber, customerName, customerPhone, cart, subtotalPaise, discountPaise, taxPaise, totalAmountPaise, paymentMethod }) => {
+    const itemsRows = cart.map(item => `
+      <tr>
+        <td style="padding: 4px 2px; border-bottom: 1px dashed #ccc; font-weight: bold;">${item.productName}</td>
+        <td style="padding: 4px 2px; border-bottom: 1px dashed #ccc; text-align: center;">${item.qty}</td>
+        <td style="padding: 4px 2px; border-bottom: 1px dashed #ccc; text-align: right;">₹${formatNumberIN(item.basePrice)}</td>
+        <td style="padding: 4px 2px; border-bottom: 1px dashed #ccc; text-align: right; font-weight: bold;">₹${formatNumberIN(item.total)}</td>
+      </tr>
+    `).join('');
 
-  const filteredProducts = products.filter(p => {
-    const matchCategory = selectedCategory === 'All' || p.category === selectedCategory;
-    const matchSearch = 
-      p.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.barcode.includes(searchQuery);
-    return matchCategory && matchSearch;
-  });
+    return `
+      <div style="font-family: monospace; font-size: 11px; text-align: center; color: #000;">
+        <h2 style="margin: 0; font-size: 16px; font-weight: bold;">VOLT ELECTRICALS</h2>
+        <p style="margin: 2px 0;">ESTIMATE / QUOTATION</p>
+        <p style="margin: 2px 0;"><strong>Invoice No:</strong> ${billNumber || 'DRAFT'}</p>
+        <p style="margin: 2px 0; border-bottom: 1px solid #000; padding-bottom: 4px;">Date: ${new Date().toLocaleDateString('en-IN')}</p>
+        <div style="text-align: left; margin: 8px 0;">
+          <p style="margin: 2px 0;"><strong>Customer:</strong> ${customerName || 'Valued Customer'}</p>
+          <p style="margin: 2px 0;"><strong>Phone:</strong> ${customerPhone || 'N/A'}</p>
+          ${paymentMethod ? `<p style="margin: 2px 0;"><strong>Pay Method:</strong> ${paymentMethod}</p>` : ''}
+        </div>
+        <table style="width: 100%; border-collapse: collapse; text-align: left; margin-top: 8px;">
+          <thead>
+            <tr style="border-bottom: 1px solid #000; border-top: 1px solid #000;">
+              <th style="padding: 4px 2px;">Item</th>
+              <th style="padding: 4px 2px; text-align: center;">Qty</th>
+              <th style="padding: 4px 2px; text-align: right;">Price</th>
+              <th style="padding: 4px 2px; text-align: right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsRows}
+          </tbody>
+        </table>
+        <div style="margin-top: 10px; border-top: 1px solid #000; padding-top: 6px; text-align: right;">
+          <p style="margin: 2px 0;">Subtotal: ₹${formatNumberIN(subtotalPaise)}</p>
+          <p style="margin: 2px 0;">Discount: ₹${formatNumberIN(discountPaise)}</p>
+          <p style="margin: 2px 0;">GST (18% incl.): ₹${formatNumberIN(taxPaise)}</p>
+          <h3 style="margin: 4px 0 0 0; font-size: 14px; font-weight: bold;">GRAND TOTAL: ₹${formatNumberIN(totalAmountPaise)}</h3>
+        </div>
+        <p style="margin-top: 12px; font-size: 10px; font-style: italic;">* This is a quotation only, not an official tax receipt.</p>
+      </div>
+    `;
+  };
 
   return (
-    <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6 selection:bg-teal-500 selection:text-white">
-      {/* POS Billing Panel */}
-      <div className="bg-[#273549] border border-[#374151] p-5 sm:p-6 rounded-2xl space-y-5 shadow-xl">
-        
-        {/* Panel Header */}
-        <div className="flex items-center justify-between border-b border-[#374151] pb-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-teal-500/10 rounded-xl border border-teal-500/30 text-[#14B8A6] shrink-0">
-              <Zap className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <h2 className="font-bold text-[#F3F4F6] text-base sm:text-lg font-sans">POS Billing Console</h2>
-              <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-mono">Fast Keyboard Checkout Engine</p>
-            </div>
-          </div>
-
+    <div className="h-[calc(100vh-4rem)] flex flex-col gap-2.5 p-3 overflow-hidden bg-[#111827] selection:bg-teal-500 selection:text-white font-sans">
+      
+      {/* TOP BAR: Fixed Session Unique Invoice Number & Date/Time */}
+      <div className="shrink-0 bg-[#1F2937] border border-[#374151] rounded-xl px-3 py-2 flex items-center justify-between shadow-md">
+        <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            {cart.length > 0 && (
-              <button
-                type="button"
-                onClick={handleHoldBill}
-                className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono font-bold transition"
-                title="Hold Bill (F8)"
-              >
-                <PauseCircle className="w-3.5 h-3.5" />
-                <span>Hold Bill (F8)</span>
-              </button>
-            )}
-            <span className="text-xs bg-teal-500/10 text-teal-300 font-mono px-3 py-1.5 rounded-xl border border-teal-500/30 font-bold">
-              {cart.length} {cart.length === 1 ? 'item' : 'items'}
+            <FileCheck className="w-4 h-4 text-teal-400" />
+            <span className="text-xs font-mono font-bold text-slate-400">INVOICE NO:</span>
+            <span className="text-xs font-mono font-extrabold text-teal-300 bg-teal-500/10 border border-teal-500/30 px-2 py-0.5 rounded">
+              {invoiceNumber || 'GENERATING...'}
+            </span>
+          </div>
+          <div className="hidden sm:flex items-center space-x-2 text-xs font-mono text-slate-400 border-l border-[#374151] pl-4">
+            <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <span>{currentTime.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+            <span className="text-teal-400 font-bold">
+              {currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
             </span>
           </div>
         </div>
 
-        {/* 1. PRODUCT SEARCH (First Section inside POS Billing Panel) */}
-        <div className="space-y-1.5 relative">
-          <label className="block text-xs font-bold text-[#9CA3AF] uppercase tracking-wider font-mono">
-            Product Search (F2)
-          </label>
-          <div className="relative">
-            <Search className="w-5 h-5 text-[#14B8A6] absolute left-3.5 top-3.5 z-10" />
-            <input
-              ref={productSearchRef}
-              type="text"
-              value={searchQuery}
-              onChange={e => {
-                setSearchQuery(e.target.value);
-                setIsSearchOpen(true);
-              }}
-              onFocus={() => setIsSearchOpen(true)}
-              onKeyDown={handleSearchKeyDown}
-              placeholder="Search product by name, code or barcode..."
-              className="w-full glass-input pl-11 pr-10 py-3.5 rounded-xl text-sm font-mono font-bold border-[#374151] focus:border-[#14B8A6] shadow-inner text-[#F3F4F6]"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setIsSearchOpen(false);
-                  if (productSearchRef.current) productSearchRef.current.focus();
-                }}
-                className="absolute right-3.5 top-3.5 text-[#9CA3AF] hover:text-white text-sm font-bold z-10"
-              >
-                ✕
-              </button>
-            )}
+        <div className="flex items-center space-x-2">
+          {cart.length > 0 && (
+            <button
+              type="button"
+              onClick={handleHoldBill}
+              className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono font-bold transition"
+              title="Hold Bill (F8)"
+            >
+              <PauseCircle className="w-3.5 h-3.5" />
+              <span>Hold (F8)</span>
+            </button>
+          )}
+          <span className="text-xs bg-[#273549] text-slate-300 font-mono px-2.5 py-1 rounded-lg border border-[#374151]">
+            Staff: <strong className="text-teal-400">{user?.username || userRole || 'Counter'}</strong>
+          </span>
+        </div>
+      </div>
 
-            {/* Real-time Search Autocomplete Dropdown Overlay Directly Below Search Input */}
+      {/* MAIN TWO-COLUMN CONTAINER */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-2.5 overflow-hidden">
+        
+        {/* LEFT COLUMN (~70% Width): Product Search, Invoice Table, Customer & Payment */}
+        <div className="w-full lg:w-[68%] xl:w-[70%] flex flex-col h-full min-h-0 gap-2">
+          
+          {/* 1. SINGLE PRODUCT SEARCH FIELD (Autocomplete Dropdown Directly Below) */}
+          <div className="relative shrink-0 bg-[#1F2937] border border-[#374151] rounded-xl p-2 shadow-md">
+            <div className="relative flex items-center">
+              <Search className="w-4 h-4 text-teal-400 absolute left-3 pointer-events-none" />
+              <input
+                ref={productSearchRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Type Product Name, Item Code or Barcode... (Enter to Select, Tab to Jump)"
+                className="w-full bg-[#111827] border border-[#374151] focus:border-teal-400 focus:ring-1 focus:ring-teal-400/40 rounded-lg pl-9 pr-16 py-1.5 text-xs sm:text-sm font-mono font-semibold text-[#F3F4F6] placeholder-slate-500 focus:outline-none transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setIsSearchOpen(false);
+                    if (productSearchRef.current) productSearchRef.current.focus();
+                  }}
+                  className="absolute right-10 text-slate-400 hover:text-white text-xs font-bold px-1.5 py-0.5"
+                >
+                  ✕
+                </button>
+              )}
+              <span className="absolute right-2 px-1.5 py-0.5 bg-teal-500/10 text-teal-300 border border-teal-500/30 rounded text-[10px] font-mono font-bold pointer-events-none">
+                F2
+              </span>
+            </div>
+
+            {/* Autocomplete Dropdown Overlay Directly Below Search Input */}
             {isSearchOpen && searchTrimmed.length > 0 && (
               <div 
-                className="absolute left-0 right-0 top-full mt-1.5 bg-[#1F2937] border border-[#374151] rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[380px] overflow-y-auto divide-y divide-[#374151]"
+                className="absolute left-0 right-0 top-full mt-1 bg-[#1F2937] border border-[#374151] rounded-xl shadow-2xl z-50 overflow-hidden max-h-[300px] overflow-y-auto divide-y divide-[#374151]"
                 onMouseDown={e => e.preventDefault()}
               >
                 {matchingProducts.length === 0 ? (
-                  <div className="p-5 text-center text-[#9CA3AF] font-mono text-xs">
-                    <div className="text-sm font-bold text-[#F3F4F6]">No matching products found.</div>
+                  <div className="p-3 text-center text-slate-400 font-mono text-xs">
+                    <div className="font-bold text-slate-200">No matching products found</div>
                   </div>
                 ) : (
                   matchingProducts.map((p, idx) => {
@@ -544,37 +684,37 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                         key={p.barcode || p.id || idx}
                         onClick={() => handleSelectProduct(p)}
                         onMouseEnter={() => setHighlightedIndex(idx)}
-                        className={`p-3.5 transition cursor-pointer flex items-center justify-between min-h-[56px] ${
+                        className={`p-2 transition cursor-pointer flex items-center justify-between ${
                           isHighlighted
-                            ? 'bg-teal-500/20 border-l-4 border-l-[#14B8A6] text-white font-bold'
+                            ? 'bg-teal-500/20 border-l-4 border-l-teal-400 text-white font-bold'
                             : 'hover:bg-[#273549] text-[#F3F4F6]'
                         } ${isOutOfStock ? 'opacity-50 pointer-events-none' : ''}`}
                       >
-                        <div className="flex-1 pr-4 space-y-0.5">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-bold text-sm text-[#F3F4F6]">
+                        <div className="flex-1 pr-3 space-y-0.5 min-w-0">
+                          <div className="flex items-center space-x-2 truncate">
+                            <span className="font-bold text-xs text-[#F3F4F6] truncate">
                               {renderHighlightedText(p.productName, searchQuery)}
                             </span>
                             {p.brand && (
-                              <span className="text-[10px] font-mono font-bold bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded uppercase">
+                              <span className="text-[9px] font-mono font-bold bg-teal-500/10 text-teal-300 border border-teal-500/20 px-1 py-0.2 rounded uppercase shrink-0">
                                 {renderHighlightedText(p.brand, searchQuery)}
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-[#9CA3AF] font-mono">
-                            Code: <strong className="text-[#F3F4F6]">{renderHighlightedText(p.productCode || p.barcode || 'N/A', searchQuery)}</strong>
+                          <div className="text-[10px] text-slate-400 font-mono truncate">
+                            Code: <strong className="text-slate-300">{renderHighlightedText(p.productCode || p.barcode || 'N/A', searchQuery)}</strong>
                           </div>
                         </div>
 
                         <div className="text-right shrink-0 space-y-0.5 font-mono">
-                          <div className="font-extrabold text-[#14B8A6] text-base">
+                          <div className="font-extrabold text-teal-400 text-xs">
                             {formatRupees(p.basePrice)}
                           </div>
-                          <div className="text-[11px]">
+                          <div className="text-[9px]">
                             {isOutOfStock ? (
-                              <span className="text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">Out of Stock</span>
+                              <span className="text-red-400 font-bold bg-red-500/10 px-1 py-0.2 rounded border border-red-500/20">Out of Stock</span>
                             ) : (
-                              <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                              <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1 py-0.2 rounded border border-emerald-500/20">
                                 Stock: {p.currentStock}
                               </span>
                             )}
@@ -587,57 +727,224 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
               </div>
             )}
           </div>
-        </div>
 
-        {/* 2. CUSTOMER DETAILS */}
-        <div className="bg-[#1F2937] border border-[#374151] p-4 rounded-xl space-y-3">
-          <div className="flex items-center justify-between text-xs font-bold text-[#9CA3AF] uppercase tracking-wider font-mono">
-            <span className="flex items-center gap-1.5">
-              <User className="w-4 h-4 text-[#14B8A6]" /> Customer Details (F4)
-            </span>
-            {existingCustomer && (
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">
-                ✓ Profile Linked
-              </span>
-            )}
+          {/* 2. INVOICE TABLE (Expands Full Height of Left Column) */}
+          <div className="flex-1 min-h-0 bg-[#1F2937] border border-[#374151] rounded-xl flex flex-col overflow-hidden shadow-md">
+            {/* Table Header Bar */}
+            <div className="shrink-0 px-3 py-1.5 bg-[#273549] border-b border-[#374151] flex items-center justify-between text-xs font-mono">
+              <div className="flex items-center space-x-2 font-bold text-slate-300">
+                <ShoppingCart className="w-3.5 h-3.5 text-teal-400" />
+                <span>INVOICE TABLE</span>
+                <span className="px-2 py-0.2 bg-teal-500/10 text-teal-300 border border-teal-500/30 rounded-full text-[10px]">
+                  {cart.length} {cart.length === 1 ? 'item' : 'items'}
+                </span>
+              </div>
+              {lastRemovedItem && (
+                <button
+                  type="button"
+                  onClick={undoRemoveItem}
+                  className="flex items-center space-x-1 font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 px-2 py-0.5 rounded text-[10px] transition"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Undo ({lastRemovedItem.productName})</span>
+                </button>
+              )}
+            </div>
+
+            {/* Table Body */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {cart.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center p-4 text-center text-slate-400 font-mono text-xs">
+                  <ShoppingCart className="w-8 h-8 text-slate-600 mb-1 opacity-40" />
+                  <p className="font-semibold text-slate-300">Invoice table is empty</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Search products above and press Enter to add to bill</p>
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs font-mono border-collapse">
+                  <thead className="sticky top-0 bg-[#273549] text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-[#374151] z-10">
+                    <tr>
+                      <th className="py-1.5 px-2.5">Product Name</th>
+                      <th className="py-1.5 px-2 text-center w-20">Quantity</th>
+                      <th className="py-1.5 px-2 text-right">Unit Price</th>
+                      <th className="py-1.5 px-2 text-right">Discount</th>
+                      <th className="py-1.5 px-2 text-right">GST</th>
+                      <th className="py-1.5 px-2.5 text-right">Line Total</th>
+                      <th className="py-1.5 px-2 text-center w-10">Delete</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#374151]">
+                    {cart.map(item => {
+                      const lineGst = Math.round(item.total * 18 / 118);
+                      return (
+                        <tr key={item.barcode} className="hover:bg-[#273549]/50 transition">
+                          <td className="py-1.5 px-2.5">
+                            <div className="font-bold text-[#F3F4F6] text-xs truncate max-w-[160px] sm:max-w-[240px]">
+                              {item.productName}
+                            </div>
+                            {item.barcode && (
+                              <div className="text-[9px] text-slate-400 font-mono">
+                                Code: {item.barcode}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-1.5 px-2 text-center">
+                            {/* Editable Quantity Textbox */}
+                            <input
+                              ref={el => (qtyInputRefs.current[item.barcode] = el)}
+                              type="number"
+                              min="1"
+                              max={item.currentStock}
+                              value={item.qty}
+                              onChange={e => updateCartQtyExact(item.barcode, e.target.value)}
+                              onFocus={e => e.target.select()}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                                  e.preventDefault();
+                                  if (productSearchRef.current) {
+                                    productSearchRef.current.focus();
+                                  }
+                                }
+                              }}
+                              className="w-14 bg-[#111827] border border-[#374151] focus:border-teal-400 focus:ring-1 focus:ring-teal-400/40 rounded px-1.5 py-0.5 text-center font-mono font-bold text-xs text-[#F3F4F6] focus:outline-none transition"
+                            />
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-slate-300 font-bold whitespace-nowrap">
+                            ₹{formatNumberIN(item.basePrice)}
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-amber-300 whitespace-nowrap">
+                            ₹{formatNumberIN(item.discountPaise || 0)}
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-slate-400 text-[11px] whitespace-nowrap">
+                            ₹{formatNumberIN(lineGst)}
+                          </td>
+                          <td className="py-1.5 px-2.5 text-right font-extrabold text-teal-300 whitespace-nowrap">
+                            ₹{formatNumberIN(item.total)}
+                          </td>
+                          <td className="py-1.5 px-2 text-center">
+                            <button 
+                              type="button"
+                              onClick={() => removeFromCart(item.barcode)} 
+                              className="p-1 rounded text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition"
+                              title="Delete item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative">
-            <div className="relative">
+        </div>
+
+        {/* RIGHT COLUMN (~30% Width): Customer Details, Payment, Bill Summary & Action Buttons */}
+        <div className="w-full lg:w-[32%] xl:w-[30%] flex flex-col h-full min-h-0 gap-2 overflow-y-auto pr-0.5">
+          
+          {/* 1. CUSTOMER SECTION */}
+          <div className="shrink-0 bg-[#1F2937] border border-[#374151] p-2.5 rounded-xl space-y-2 shadow-md relative">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
+              <span className="flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-teal-400" /> CUSTOMER DETAILS
+              </span>
+              <span className="px-1.5 py-0.2 bg-teal-500/10 text-teal-300 border border-teal-500/30 rounded text-[9px] font-mono font-bold">
+                F4
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 relative">
+              <div>
+                <input
+                  ref={customerPhoneRef}
+                  type="text"
+                  value={customerPhone}
+                  onChange={e => {
+                    setCustomerPhone(e.target.value);
+                    setShowCustomerSuggestions(true);
+                  }}
+                  onFocus={() => setShowCustomerSuggestions(true)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                      e.preventDefault();
+                      if (matchedCustomers.length > 0 && showCustomerSuggestions) {
+                        selectCustomer(matchedCustomers[0]);
+                      } else if (customerNameRef.current) {
+                        customerNameRef.current.focus();
+                      }
+                    } else if (e.key === 'Escape') {
+                      setShowCustomerSuggestions(false);
+                    }
+                  }}
+                  placeholder="Mobile Number *"
+                  className="w-full bg-[#111827] border border-[#374151] focus:border-teal-400 focus:ring-1 focus:ring-teal-400/40 rounded-lg px-2.5 py-1.5 text-xs font-mono text-teal-300 font-bold placeholder-slate-500 focus:outline-none transition"
+                  maxLength={10}
+                />
+              </div>
+
               <input
-                ref={customerPhoneRef}
+                ref={customerNameRef}
                 type="text"
-                value={customerPhone}
-                onChange={e => {
-                  setCustomerPhone(e.target.value);
-                  setShowCustomerSuggestions(true);
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                    e.preventDefault();
+                    if (paymentMethodRef.current) {
+                      paymentMethodRef.current.focus();
+                    } else if (discountRef.current) {
+                      discountRef.current.focus();
+                    }
+                  }
                 }}
-                onFocus={() => setShowCustomerSuggestions(true)}
-                placeholder="Mobile Number (10 Digits)*"
-                className="w-full glass-input px-3.5 py-2 rounded-lg text-xs font-mono text-teal-300 font-bold border-[#374151]"
-                maxLength={10}
+                placeholder="Customer Name *"
+                className="w-full bg-[#111827] border border-[#374151] focus:border-teal-400 focus:ring-1 focus:ring-teal-400/40 rounded-lg px-2.5 py-1.5 text-xs font-bold text-[#F3F4F6] placeholder-slate-500 focus:outline-none transition"
               />
 
-              {/* Auto-suggest dropdown when typing */}
+              {/* Autocomplete Dropdown Overlay (Opens Downwards over Payment/Summary) */}
               {showCustomerSuggestions && matchedCustomers.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-[#273549] border border-[#374151] rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-[#374151]">
-                  {matchedCustomers.map(cust => (
+                <div 
+                  className="absolute left-0 right-0 top-full mt-1 bg-[#1E293B] border-2 border-teal-500/60 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[100] overflow-hidden max-h-56 overflow-y-auto divide-y divide-[#374151]"
+                  onMouseDown={e => e.preventDefault()}
+                >
+                  <div className="bg-[#273549] px-3 py-1.5 text-[10px] font-mono font-bold text-teal-300 flex items-center justify-between border-b border-[#374151]">
+                    <span className="flex items-center gap-1">
+                      <UserCheck className="w-3 h-3 text-teal-400" />
+                      EXISTING CUSTOMERS ({matchedCustomers.length})
+                    </span>
+                    <span className="text-slate-400 text-[9px]">Press Enter or click to select</span>
+                  </div>
+                  {matchedCustomers.map((cust, idx) => (
                     <div
-                      key={cust.id || cust.phone}
+                      key={cust.id || cust.phone || idx}
                       onClick={() => selectCustomer(cust)}
-                      className="p-2.5 hover:bg-[#1F2937] cursor-pointer transition flex items-center justify-between text-xs"
+                      className="p-2 hover:bg-teal-500/20 cursor-pointer transition flex items-center justify-between text-xs font-mono group"
                     >
-                      <div>
-                        <div className="font-bold text-[#F3F4F6] flex items-center gap-1">
-                          <span>{cust.name}</span>
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-teal-500/20 text-teal-300 font-bold flex items-center justify-center text-xs shrink-0 border border-teal-500/30">
+                          {cust.name ? cust.name.charAt(0).toUpperCase() : 'C'}
                         </div>
-                        <div className="text-[11px] text-[#14B8A6] font-mono">📱 {cust.phone}</div>
+                        <div>
+                          <div className="font-bold text-[#F3F4F6] group-hover:text-teal-200 transition">
+                            {renderHighlightedText(cust.name, customerPhone)}
+                          </div>
+                          <div className="text-[10px] text-teal-400 font-bold">
+                            📞 {renderHighlightedText(cust.phone, customerPhone)}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-right text-[10px]">
+
+                      <div className="text-right shrink-0">
                         {(cust.totalDue || 0) > 0 ? (
-                          <span className="text-red-400 font-mono font-bold">Due: {formatRupees(cust.totalDue || 0)}</span>
+                          <span className="px-2 py-0.5 bg-red-500/20 text-red-300 border border-red-500/40 rounded text-[10px] font-bold">
+                            Pending Due: ₹{formatNumberIN(cust.totalDue)}
+                          </span>
                         ) : (
-                          <span className="text-emerald-400 font-mono">Clean Ledger</span>
+                          <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded text-[9px] font-bold">
+                            ✓ No Dues
+                          </span>
                         )}
                       </div>
                     </div>
@@ -646,160 +953,224 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
               )}
             </div>
 
-            <input
-              type="text"
-              value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              placeholder="Customer Name*"
-              className="glass-input px-3.5 py-2 rounded-lg text-xs font-bold text-[#F3F4F6] border-[#374151]"
-            />
-          </div>
-
-          {/* Customer Pending Due Warning Alert! */}
-          {existingCustomer && (existingCustomer.totalDue || 0) > 0 && (
-            <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400 flex items-start space-x-2">
-              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-bold">⚠️ Customer Pending Due Warning:</div>
-                <div>{existingCustomer.name} has previous outstanding dues of <strong className="text-red-300 underline">{formatRupees(existingCustomer.totalDue)}</strong>.</div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 3. INVOICE CART */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs font-bold text-[#9CA3AF] uppercase tracking-wider font-mono">
-            <span className="flex items-center gap-1.5">
-              <ShoppingCart className="w-4 h-4 text-[#14B8A6]" /> Invoice Cart
-            </span>
-            {lastRemovedItem && (
-              <button
-                type="button"
-                onClick={undoRemoveItem}
-                className="flex items-center space-x-1 font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded text-[11px] transition"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>Undo Remove ({lastRemovedItem.productName})</span>
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
-            {cart.length === 0 ? (
-              <div className="py-8 text-center text-[#9CA3AF] text-xs font-mono bg-[#1F2937] border border-[#374151] rounded-xl">
-                Cart is empty. Search products above to add to bill.
-              </div>
-            ) : (
-              cart.map(item => (
-                <div key={item.barcode} className="bg-[#1F2937] p-3 rounded-xl border border-[#374151] flex items-center justify-between text-xs">
-                  <div className="flex-1 pr-2">
-                    <div className="font-semibold text-[#F3F4F6] truncate max-w-[220px] sm:max-w-[320px]">{item.productName}</div>
-                    <div className="text-[11px] text-[#14B8A6] font-mono">₹{formatNumberIN(item.basePrice)} × {item.qty}</div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center bg-[#273549] border border-[#374151] rounded-xl overflow-hidden">
-                      <button onClick={() => updateCartQty(item.barcode, -1)} className="p-2 text-[#9CA3AF] hover:text-[#F3F4F6] min-w-[36px] min-h-[36px] flex items-center justify-center">
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="px-2 font-mono font-bold text-[#F3F4F6] text-xs">{item.qty}</span>
-                      <button onClick={() => updateCartQty(item.barcode, 1)} className="p-2 text-[#9CA3AF] hover:text-[#F3F4F6] min-w-[36px] min-h-[36px] flex items-center justify-center">
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <span className="font-mono font-bold text-[#F3F4F6] text-xs w-20 text-right">
-                      ₹{formatNumberIN(item.total)}
-                    </span>
-                    <button onClick={() => removeFromCart(item.barcode)} className="text-[#9CA3AF] hover:text-red-400 p-1.5 flex items-center justify-center">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+            {/* Status Indicator Bar */}
+            {existingCustomer ? (
+              <div className={`p-1.5 rounded-lg border text-[10px] font-mono flex items-center justify-between ${
+                (existingCustomer.totalDue || 0) > 0 
+                  ? 'bg-red-500/10 border-red-500/30 text-red-300' 
+                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              }`}>
+                <div className="flex items-center space-x-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                  <span>Existing Customer: <strong className="text-white font-bold">{existingCustomer.name}</strong></span>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* 4. PAYMENT SECTION */}
-        <div className="bg-[#1F2937] border border-[#374151] p-4 rounded-xl space-y-3">
-          <div className="text-xs font-bold text-[#9CA3AF] uppercase tracking-wider font-mono">Payment Section</div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-            {['UPI', 'Cash', 'Card', 'Credit/Due'].map(mode => (
-              <button
-                key={mode}
-                onClick={() => setPaymentMethod(mode)}
-                className={`py-2.5 rounded-xl font-mono text-xs font-semibold transition min-h-[44px] ${
-                  paymentMethod === mode
-                    ? 'bg-[#14B8A6] text-white shadow-sm font-bold'
-                    : 'bg-[#273549] text-[#9CA3AF] hover:text-[#F3F4F6] border border-[#374151]'
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-
-          {/* Amount Paid & Due Breakdown */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] text-[#9CA3AF] font-mono">Amount Paid Now (₹)</label>
-                {paymentMethod !== 'Credit/Due' && totalAmountPaise > 0 && (
-                  <button 
-                    type="button"
-                    onClick={() => setPaidRupees((totalAmountPaise / 100).toString())}
-                    className="px-2 py-0.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded font-mono text-[10px] font-bold whitespace-nowrap transition inline-flex items-center"
-                  >
-                    Full Pay ({formatRupees(totalAmountPaise)})
-                  </button>
+                {(existingCustomer.totalDue || 0) > 0 ? (
+                  <span className="font-bold text-red-400 bg-red-500/20 px-1.5 py-0.5 rounded">
+                    Previous Due: ₹{formatNumberIN(existingCustomer.totalDue)}
+                  </span>
+                ) : (
+                  <span className="text-emerald-400 font-bold">✓ Account Clear</span>
                 )}
               </div>
-              <input
-                type="number"
-                value={paidRupees}
-                onChange={e => setPaidRupees(e.target.value)}
-                placeholder="Enter amount paid (₹)"
-                disabled={paymentMethod === 'Credit/Due'}
-                className="w-full glass-input px-3.5 py-2 rounded-lg font-mono text-emerald-400 font-bold min-h-[44px] border-[#374151]"
-              />
+            ) : (
+              customerPhone.length === 10 && (
+                <div className="p-1.5 rounded bg-teal-500/10 border border-teal-500/20 text-[10px] text-teal-300 font-mono flex items-center space-x-1.5">
+                  <UserPlus className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                  <span>New customer record will be saved automatically upon sale.</span>
+                </div>
+              )
+            )}
+          </div>
+
+          {/* 2. PAYMENT SECTION */}
+          <div className="shrink-0 bg-[#1F2937] border border-[#374151] p-2.5 rounded-xl space-y-1.5 shadow-md">
+            <div className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center justify-between">
+              <span>Payment</span>
+              <span className="text-[10px] text-teal-400 font-bold">{paymentMethod}</span>
             </div>
-            <div>
-              <label className="block text-[11px] text-[#9CA3AF] font-mono mb-1">New Due Balance</label>
-              <div className={`px-3.5 py-2 rounded-lg font-mono font-bold border text-xs min-h-[44px] flex items-center ${
+
+            <div 
+              ref={paymentMethodRef}
+              tabIndex={0}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                  e.preventDefault();
+                  if (discountRef.current) discountRef.current.focus();
+                } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                  const modes = ['Cash', 'UPI', 'Card', 'Credit/Due'];
+                  const currentIdx = modes.indexOf(paymentMethod);
+                  const nextIdx = e.key === 'ArrowRight' 
+                    ? (currentIdx + 1) % modes.length 
+                    : (currentIdx - 1 + modes.length) % modes.length;
+                  setPaymentMethod(modes[nextIdx]);
+                }
+              }}
+              className="grid grid-cols-4 gap-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-teal-400 rounded-lg p-0.5"
+            >
+              {[
+                { id: 'Cash', label: 'Cash' },
+                { id: 'UPI', label: 'UPI' },
+                { id: 'Card', label: 'Card' },
+                { id: 'Credit/Due', label: 'Credit' }
+              ].map(mode => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => setPaymentMethod(mode.id)}
+                  className={`py-1 px-1 rounded text-[11px] font-bold transition text-center border focus:outline-none ${
+                    paymentMethod === mode.id
+                      ? 'bg-teal-600 text-white border-teal-400 shadow-sm'
+                      : 'bg-[#111827] text-slate-400 hover:text-slate-200 border-[#374151]'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
+              <div>
+                <input
+                  ref={paidAmountRef}
+                  type="number"
+                  value={paidRupees}
+                  onChange={e => setPaidRupees(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                      e.preventDefault();
+                      if (completeSaleBtnRef.current) completeSaleBtnRef.current.focus();
+                    }
+                  }}
+                  placeholder="Paid (₹)"
+                  disabled={paymentMethod === 'Credit/Due'}
+                  className="w-full bg-[#111827] border border-[#374151] focus:border-teal-400 focus:ring-1 focus:ring-teal-400/40 rounded-lg px-2 py-1 text-xs font-mono text-emerald-400 font-bold focus:outline-none transition disabled:opacity-50"
+                />
+              </div>
+              <div className={`px-2 py-1 rounded-lg font-mono font-bold border text-xs flex items-center justify-between ${
                 dueAmountPaise > 0 
                   ? 'bg-red-500/10 border-red-500/30 text-red-400' 
-                  : 'bg-[#273549] border-[#374151] text-[#9CA3AF]'
+                  : 'bg-[#111827] border-[#374151] text-slate-400'
               }`}>
-                {formatRupees(dueAmountPaise)}
+                <span className="text-[10px]">Due:</span>
+                <span>₹{formatNumberIN(dueAmountPaise)}</span>
               </div>
             </div>
           </div>
-        </div>
+          
+          {/* BILL SUMMARY */}
+          <div className="shrink-0 bg-[#1F2937] border border-[#374151] p-3 rounded-xl space-y-2 shadow-md">
+            <div className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono border-b border-[#374151] pb-1.5">
+              Bill Summary
+            </div>
 
-        {/* 5. BILL SUMMARY */}
-        <div className="border-t border-[#374151] pt-4 space-y-2 text-xs font-mono">
-          <div className="flex justify-between text-[#9CA3AF]">
-            <span>Subtotal:</span>
-            <span>{formatRupees(subtotalPaise)}</span>
-          </div>
-          <div className="flex justify-between text-[#9CA3AF]">
-            <span>GST (18% included):</span>
-            <span>{formatRupees(taxPaise)}</span>
-          </div>
-          <div className="flex justify-between text-[#F3F4F6] font-extrabold text-lg pt-2 border-t border-[#374151]">
-            <span>TOTAL AMOUNT:</span>
-            <span className="text-[#14B8A6]">{formatRupees(totalAmountPaise)}</span>
+            <div className="space-y-1.5 text-xs font-mono border-b border-[#374151] pb-2">
+              <div className="flex justify-between text-slate-400">
+                <span>Subtotal</span>
+                <span className="font-bold text-slate-200">₹{formatNumberIN(subtotalPaise)}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>GST (18% incl.)</span>
+                <span className="text-slate-300">₹{formatNumberIN(taxPaise)}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-400 pt-0.5">
+                <span>Discount (₹)</span>
+                <input
+                  ref={discountRef}
+                  type="number"
+                  value={discountRupees}
+                  onChange={e => setDiscountRupees(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                      e.preventDefault();
+                      if (paymentMethod !== 'Credit/Due' && paidAmountRef.current) {
+                        paidAmountRef.current.focus();
+                        paidAmountRef.current.select();
+                      } else if (completeSaleBtnRef.current) {
+                        completeSaleBtnRef.current.focus();
+                      }
+                    }
+                  }}
+                  placeholder="0"
+                  className="w-20 bg-[#111827] border border-[#374151] focus:border-teal-400 focus:ring-1 focus:ring-teal-400/40 rounded px-1.5 py-0.5 text-right font-mono text-xs text-amber-300 font-bold focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* GRAND TOTAL - Visually Prominent */}
+            <div className="bg-gradient-to-r from-teal-950/90 to-emerald-950/90 border border-teal-500/50 p-2.5 rounded-xl flex items-center justify-between shadow-xl shadow-teal-500/10">
+              <div>
+                <div className="text-[10px] text-teal-400 uppercase tracking-wider font-mono font-black">Grand Total</div>
+                <div className="text-[11px] text-slate-400 font-mono">Total Payable</div>
+              </div>
+              <div className="text-2xl xl:text-3xl font-black font-mono text-teal-300 tracking-tight drop-shadow-md">
+                ₹{formatNumberIN(totalAmountPaise)}
+              </div>
+            </div>
           </div>
 
-          <button
-            onClick={handleCheckout}
-            disabled={isSubmitting || cart.length === 0}
-            className="w-full py-4 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-extrabold text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-2 disabled:opacity-50 mt-3 min-h-[48px]"
-          >
-            <Zap className="w-5 h-5 fill-white text-white" />
-            <span>{isSubmitting ? 'COMMITTING TRANSACTION...' : 'COMPLETE SALE & GENERATE BILL'}</span>
-          </button>
+          {/* BOTTOM ACTIONS */}
+          <div className="shrink-0 space-y-1.5 mt-auto">
+            {/* Complete Sale Button */}
+            <button
+              ref={completeSaleBtnRef}
+              onClick={handleCheckout}
+              onKeyDown={e => {
+                if (e.key === 'Tab' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (printBtnRef.current) printBtnRef.current.focus();
+                }
+              }}
+              disabled={isSubmitting || cart.length === 0}
+              className="w-full py-3 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 focus:ring-2 focus:ring-teal-400 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-teal-500/20 transition-all transform active:scale-[0.99] flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed border border-teal-400/30 min-h-[46px] focus:outline-none"
+            >
+              <Zap className="w-4 h-4 fill-white" />
+              <span>{isSubmitting ? 'PROCESSING...' : 'COMPLETE SALE'}</span>
+            </button>
+
+            {/* Action Buttons Grid: Hold Bill, Save Estimate, Print */}
+            <div className="grid grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                onClick={handleHoldBill}
+                disabled={cart.length === 0}
+                className="py-2 px-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono font-bold text-xs flex items-center justify-center space-x-1 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                title="Hold Bill (F8)"
+              >
+                <PauseCircle className="w-3.5 h-3.5" />
+                <span>Hold (F8)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveEstimate}
+                disabled={cart.length === 0}
+                className="py-2 px-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 font-mono font-bold text-xs flex items-center justify-center space-x-1 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                title="Save Estimate / Quotation"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Estimate</span>
+              </button>
+
+              <button
+                ref={printBtnRef}
+                type="button"
+                onClick={handlePrintReceipt}
+                onKeyDown={e => {
+                  if (e.key === 'Tab' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (productSearchRef.current) productSearchRef.current.focus();
+                  }
+                }}
+                disabled={cart.length === 0}
+                className="py-2 px-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono font-bold text-xs flex items-center justify-center space-x-1 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                title="Print Receipt Preview"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print</span>
+              </button>
+            </div>
+          </div>
+
         </div>
 
       </div>

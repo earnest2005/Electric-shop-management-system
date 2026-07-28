@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Wifi, WifiOff, AlertCircle, Lock, Sun, Moon, Keyboard, Clock, Menu } from 'lucide-react';
+import { Zap, Wifi, WifiOff, AlertCircle, Lock, Sun, Moon, Keyboard, Clock, Menu, AlertTriangle } from 'lucide-react';
 import { formatRupees } from '../utils/currency';
-import { getCustomers, getShopDetails, DEFAULT_SHOP_DETAILS } from '../services/db';
+import { getCustomers, getShopDetails, getProducts, DEFAULT_SHOP_DETAILS } from '../services/db';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import LowStockModal from './LowStockModal';
 
 export default function Navbar({ currentView, onOpenShortcuts, onOpenDrafts, onToggleMobileMenu, draftCount = 0 }) {
   const { logout, userRole } = useAuth();
@@ -13,6 +14,10 @@ export default function Navbar({ currentView, onOpenShortcuts, onOpenDrafts, onT
   const [dueCustomerCount, setDueCustomerCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [shopDetails, setShopDetails] = useState(DEFAULT_SHOP_DETAILS);
+
+  // Low stock state
+  const [products, setProducts] = useState([]);
+  const [showLowStockModal, setShowLowStockModal] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -35,14 +40,23 @@ export default function Navbar({ currentView, onOpenShortcuts, onOpenDrafts, onT
       if (details) setShopDetails(details);
     };
 
+    const loadProductsData = async () => {
+      const prList = await getProducts();
+      setProducts(prList || []);
+    };
+
     loadDues();
     loadShop();
+    loadProductsData();
 
     const handleShopUpdate = (e) => {
       if (e.detail) setShopDetails(e.detail);
     };
 
-    window.addEventListener('volt_db_updated', loadDues);
+    window.addEventListener('volt_db_updated', () => {
+      loadDues();
+      loadProductsData();
+    });
     window.addEventListener('volt_shop_updated', handleShopUpdate);
 
     return () => {
@@ -134,24 +148,29 @@ export default function Navbar({ currentView, onOpenShortcuts, onOpenDrafts, onT
           </button>
         )}
 
-        {/* Connection Status Indicator */}
-        <div className={`hidden md:flex items-center space-x-2 text-xs px-3 py-1.5 rounded-full border font-mono font-medium ${
-          isOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-        }`}>
-          {isOnline ? <Wifi className="w-4 h-4 text-emerald-400" /> : <WifiOff className="w-4 h-4 text-amber-400" />}
-          <span>{isOnline ? 'Live Cloud' : 'Offline'}</span>
-        </div>
 
-        {/* Role Badge */}
-        {userRole && (
-          <span className={`text-[10px] px-2.5 py-1 rounded-lg border font-mono font-bold flex items-center gap-1 ${
-            userRole === 'admin' 
-              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' 
-              : 'bg-teal-500/10 text-teal-300 border-teal-500/30'
-          }`}>
-            {userRole === 'admin' ? '👑 ADMIN' : '👤 STAFF'}
-          </span>
-        )}
+
+        {/* Low Stock Alert Notification Button */}
+        {(() => {
+          const lowCount = products.filter(p => (p.currentStock || 0) <= (p.minStockAlert || 10)).length;
+          if (lowCount === 0) return null;
+
+          return (
+            <button
+              type="button"
+              onClick={() => setShowLowStockModal(true)}
+              className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border transition text-xs font-mono font-bold ${
+                userRole === 'admin'
+                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/40 animate-pulse'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/40'
+              }`}
+              title={userRole === 'admin' ? 'Low Stock Alerts - Click to Restock' : 'Low Stock Items Counter Notice'}
+            >
+              <AlertTriangle className={`w-4 h-4 ${userRole === 'admin' ? 'text-red-400' : 'text-amber-400'}`} />
+              <span>{userRole === 'admin' ? `🔴 Low Stock (${lowCount})` : `⚠️ Low Stock Items (${lowCount})`}</span>
+            </button>
+          );
+        })()}
 
         {/* Lock POS Button */}
         <button
@@ -164,6 +183,16 @@ export default function Navbar({ currentView, onOpenShortcuts, onOpenDrafts, onT
           <span className="hidden sm:inline">Lock</span>
         </button>
       </div>
+
+      {showLowStockModal && (
+        <LowStockModal
+          products={products}
+          onClose={() => setShowLowStockModal(false)}
+          onRefreshData={() => {
+            getProducts().then(p => setProducts(p || []));
+          }}
+        />
+      )}
     </header>
   );
 }
