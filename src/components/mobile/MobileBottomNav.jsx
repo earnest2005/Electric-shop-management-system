@@ -11,7 +11,7 @@ export default function MobileBottomNav({ currentView, onNavigate, onOpenMore })
 
   const tabs = [
     { id: primaryDashboard, label: 'Dashboard', icon: LayoutDashboard },
-    { id: userRole === 'staff' ? 'pos' : 'inventory', label: userRole === 'staff' ? 'POS' : 'Inventory', icon: userRole === 'staff' ? ShoppingBag : Package },
+    { id: 'inventory', label: 'Inventory', icon: Package },
     { id: customerView, label: 'Customers', icon: Users },
     { id: billView, label: 'Bills', icon: FileText },
   ];

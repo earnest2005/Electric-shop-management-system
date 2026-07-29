@@ -1,16 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Search, PlusCircle, AlertTriangle, Edit3, Trash2, CheckCircle2 } from 'lucide-react';
+import { Package, Search, PlusCircle, AlertTriangle, Edit3, CheckCircle2 } from 'lucide-react';
 import { formatRupees } from '../../utils/currency';
-import { getProducts, saveProduct, deleteProduct } from '../../services/db';
+import { getProducts, saveProduct } from '../../services/db';
 import { useAuth } from '../../context/AuthContext';
 import { useAlert } from '../../context/AlertContext';
 
+const CATEGORIES = [
+  'all',
+  'low-stock',
+  'Wires & Cables',
+  'Switches & Sockets',
+  'Lighting & LED',
+  'MCB & DB Box',
+  'Pipes & Fittings',
+  'Tools & Hardware'
+];
+
 export default function MobileInventory({ initialFilter = 'all' }) {
   const { userRole } = useAuth();
-  const { toast, confirm } = useAlert();
+  const { toast } = useAlert();
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
-  const [filterCategory, setFilterCategory] = useState(initialFilter || 'all');
+  const [filterCategory, setFilterCategory] = useState(typeof initialFilter === 'string' ? initialFilter : 'all');
   const [loading, setLoading] = useState(true);
 
   // Add/Edit modal state
@@ -35,9 +46,15 @@ export default function MobileInventory({ initialFilter = 'all' }) {
 
   async function loadProducts() {
     setLoading(true);
-    const data = await getProducts();
-    setProducts(data || []);
-    setLoading(false);
+    try {
+      const data = await getProducts();
+      setProducts(data || []);
+    } catch (err) {
+      console.error("Failed to load products:", err);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const handleOpenAddModal = () => {
@@ -98,13 +115,18 @@ export default function MobileInventory({ initialFilter = 'all' }) {
   };
 
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
-                          p.brand.toLowerCase().includes(search.toLowerCase()) ||
-                          p.category.toLowerCase().includes(search.toLowerCase());
+    if (!p) return false;
+    const nameStr = (p.name || '').toLowerCase();
+    const brandStr = (p.brand || '').toLowerCase();
+    const catStr = (p.category || '').toLowerCase();
+    const query = (search || '').toLowerCase();
+
+    const matchesSearch = !query || nameStr.includes(query) || brandStr.includes(query) || catStr.includes(query);
+    
     if (filterCategory === 'low-stock') {
       return matchesSearch && (p.currentStock || 0) <= (p.minStockAlert || 10);
     }
-    if (filterCategory !== 'all') {
+    if (filterCategory && filterCategory !== 'all') {
       return matchesSearch && p.category === filterCategory;
     }
     return matchesSearch;
@@ -119,7 +141,7 @@ export default function MobileInventory({ initialFilter = 'all' }) {
             <Package className="w-6 h-6 text-[#14B8A6]" /> Inventory Master
           </h2>
           <p className="text-xs text-[#9CA3AF] font-mono mt-0.5">
-            {filteredProducts.length} Items Listed
+            {filteredProducts.length} Products Found
           </p>
         </div>
 
@@ -135,25 +157,56 @@ export default function MobileInventory({ initialFilter = 'all' }) {
         )}
       </div>
 
-      {/* Clean Single Mobile Search Bar */}
+      {/* Clean Mobile Search Bar */}
       <div className="relative">
         <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search items by name, brand..."
+          placeholder="Search product name, brand..."
           className="w-full pl-11 pr-4 py-3 bg-[#1F2937] border border-[#374151] rounded-2xl text-sm text-[#F3F4F6] placeholder-[#9CA3AF] focus:outline-none focus:border-[#14B8A6] shadow-sm"
         />
+      </div>
+
+      {/* Category Filter Pills (Horizontal Scroll) */}
+      <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
+        {CATEGORIES.map(cat => {
+          const isActive = filterCategory === cat;
+          let label = cat === 'all' ? 'All Items' : cat === 'low-stock' ? '⚠️ Low Stock' : cat;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setFilterCategory(cat)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold shrink-0 transition ${
+                isActive 
+                  ? 'bg-[#14B8A6] text-white shadow-sm' 
+                  : 'bg-[#1E293B] text-[#9CA3AF] border border-[#374151]'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Product List Stacked Mobile Cards */}
       <div className="space-y-3">
         {loading ? (
-          <div className="p-8 text-center text-xs text-[#9CA3AF] font-mono">Loading inventory...</div>
+          <div className="p-8 text-center text-xs text-[#9CA3AF] font-mono">Loading inventory items...</div>
         ) : filteredProducts.length === 0 ? (
-          <div className="p-8 text-center bg-[#1E293B] border border-[#374151] rounded-2xl text-xs text-[#9CA3AF] font-mono">
-            No products found in inventory.
+          <div className="p-8 text-center bg-[#1E293B] border border-[#374151] rounded-2xl text-xs text-[#9CA3AF] font-mono space-y-2">
+            <div>No products found in inventory.</div>
+            {filterCategory !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setFilterCategory('all')}
+                className="text-teal-400 underline text-xs font-bold"
+              >
+                Clear Category Filter
+              </button>
+            )}
           </div>
         ) : (
           filteredProducts.map((p) => {
@@ -162,17 +215,17 @@ export default function MobileInventory({ initialFilter = 'all' }) {
 
             return (
               <div 
-                key={p.id}
+                key={p.id || p.name}
                 className="bg-[#1E293B] border border-[#374151] rounded-2xl p-4 shadow-sm space-y-3"
               >
                 {/* Header: Name & Status Badge */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-0.5">
                     <h3 className="font-extrabold text-sm text-[#F3F4F6] leading-snug">
-                      {p.name}
+                      {p.name || 'Unnamed Product'}
                     </h3>
                     <div className="text-xs font-mono text-[#9CA3AF]">
-                      Brand: <span className="text-[#14B8A6] font-bold">{p.brand}</span> • {p.category}
+                      Brand: <span className="text-[#14B8A6] font-bold">{p.brand || 'Generic'}</span> • {p.category || 'General'}
                     </div>
                   </div>
 
