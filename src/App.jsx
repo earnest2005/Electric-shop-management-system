@@ -10,6 +10,14 @@ import AdminInvoiceModal from './components/AdminInvoiceModal';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import DraftInvoicesModal from './components/DraftInvoicesModal';
 
+import { useIsMobile } from './hooks/useIsMobile';
+import MobileHeader from './components/mobile/MobileHeader';
+import MobileBottomNav from './components/mobile/MobileBottomNav';
+import MobileDashboard from './components/mobile/MobileDashboard';
+import MobileInventory from './components/mobile/MobileInventory';
+import MobileCustomers from './components/mobile/MobileCustomers';
+import MobileBills from './components/mobile/MobileBills';
+
 import { Lock } from 'lucide-react';
 
 // Admin Portal Pages
@@ -241,8 +249,124 @@ function MainAppContent() {
     setDraftInvoices(updated);
   };
 
+  const isMobile = useIsMobile(768);
+
+  const getMobileTitle = (view) => {
+    switch (view) {
+      case 'admin-dashboard':
+      case 'staff-dashboard':
+        return 'Volt Dashboard';
+      case 'inventory':
+        return 'Inventory Master';
+      case 'customer-records':
+      case 'dues':
+        return 'Customer Directory';
+      case 'bill-records':
+      case 'history':
+        return 'Bill Records';
+      case 'pos':
+        return 'POS Billing';
+      case 'reports':
+        return 'Reports & Analytics';
+      case 'offers':
+      case 'active-offers':
+        return 'Offers & Promotions';
+      case 'settings':
+        return 'Shop Settings';
+      default:
+        return 'Volt Electricals';
+    }
+  };
+
   if (!isAuthenticated) {
     return <LockScreen />;
+  }
+
+  // DEDICATED NATIVE MOBILE LAYOUT (<768px)
+  if (isMobile) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#111827] text-[#F3F4F6] font-sans selection:bg-teal-500 selection:text-white">
+        {/* Native Mobile Header */}
+        <MobileHeader 
+          title={getMobileTitle(currentView)} 
+          onOpenMenu={() => setIsMobileOpen(true)} 
+        />
+
+        {/* Mobile Main Body */}
+        <main className="flex-1 overflow-y-auto pb-20">
+          <Suspense fallback={<PageLoader />}>
+            {(currentView === 'admin-dashboard' || currentView === 'staff-dashboard') && (
+              <MobileDashboard onNavigate={handleNavigate} />
+            )}
+
+            {currentView === 'inventory' && (
+              <MobileInventory initialFilter={inventoryInitialFilter} />
+            )}
+
+            {(currentView === 'customer-records' || currentView === 'dues') && (
+              <MobileCustomers />
+            )}
+
+            {(currentView === 'bill-records' || currentView === 'history') && (
+              <MobileBills onViewReceipt={handleViewReceipt} />
+            )}
+
+            {currentView === 'pos' && (
+              <POSBilling 
+                onCompleteSale={handleCompleteSale} 
+                onResumeDraftData={activeResumedDraft}
+              />
+            )}
+
+            {currentView === 'reports' && (
+              <ReportsAnalytics />
+            )}
+
+            {currentView === 'offers' && (
+              <OfferManagement />
+            )}
+
+            {currentView === 'active-offers' && (
+              <ActiveOffers onNavigate={handleNavigate} />
+            )}
+
+            {currentView === 'settings' && (
+              <ShopSettings />
+            )}
+          </Suspense>
+        </main>
+
+        {/* Drawer Sidebar Menu for Mobile */}
+        <Sidebar 
+          currentView={currentView} 
+          setCurrentView={handleNavigate} 
+          isMobileOpen={isMobileOpen}
+          setIsMobileOpen={setIsMobileOpen}
+        />
+
+        {/* Native Mobile 5-Tab Bottom Navigation Bar */}
+        <MobileBottomNav 
+          currentView={currentView} 
+          onNavigate={handleNavigate} 
+          onOpenMore={() => setIsMobileOpen(true)} 
+        />
+
+        {/* Receipt Viewer Modal */}
+        {selectedInvoice && (
+          userRole === 'admin' ? (
+            <AdminInvoiceModal
+              invoice={selectedInvoice}
+              onClose={() => setSelectedInvoice(null)}
+            />
+          ) : (
+            <ReceiptModal
+              invoice={selectedInvoice}
+              onClose={() => setSelectedInvoice(null)}
+            />
+          )
+        )}
+      </div>
+    );
   }
 
   return (
