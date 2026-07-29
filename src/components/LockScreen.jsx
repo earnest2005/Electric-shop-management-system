@@ -42,12 +42,12 @@ export default function LockScreen() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/95 backdrop-blur-md p-4 font-sans selection:bg-teal-500 selection:text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/95 backdrop-blur-md p-3 sm:p-4 font-sans overflow-y-auto selection:bg-teal-500 selection:text-white">
       {/* Background ambient lighting effects */}
       <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
       <div className="absolute bottom-1/4 right-1/3 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className={`w-full max-w-md bg-[#273549] border border-[#374151] rounded-3xl p-8 shadow-xl space-y-6 relative z-10 transition-transform ${shake ? 'animate-bounce' : ''}`}>
+      <div className={`w-full max-w-md bg-[#273549] border border-[#374151] rounded-3xl p-5 sm:p-8 shadow-xl space-y-5 sm:space-y-6 relative z-10 my-auto transition-transform ${shake ? 'animate-bounce' : ''}`}>
         
         {/* Brand Lock Header */}
         <div className="text-center space-y-3">

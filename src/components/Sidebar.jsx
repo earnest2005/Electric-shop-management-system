@@ -18,6 +18,18 @@ export default function Sidebar({ currentView, setCurrentView, isMobileOpen, set
     return () => window.removeEventListener('volt_db_updated', updateDueBadge);
   }, []);
 
+  // Prevent background body scrolling when mobile drawer is open
+  useEffect(() => {
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileOpen]);
+
   const adminNavItems = [
     { id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'inventory', label: 'Inventory', icon: Package },

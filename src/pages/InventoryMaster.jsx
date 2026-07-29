@@ -861,7 +861,7 @@ export default function InventoryMaster({ initialFilter = 'all' }) {
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="p-5 space-y-3.5 text-xs font-mono max-h-[500px] overflow-y-auto">
+            <form onSubmit={handleSaveProduct} className="p-4 sm:p-5 space-y-3.5 text-xs font-mono max-h-[75vh] overflow-y-auto">
               
               {/* Product Code & Barcode */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -602,7 +602,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col gap-2.5 p-3 overflow-hidden bg-[#111827] selection:bg-teal-500 selection:text-white font-sans">
+    <div className="min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] flex flex-col gap-2.5 p-2 sm:p-3 overflow-y-auto lg:overflow-hidden bg-[#111827] selection:bg-teal-500 selection:text-white font-sans pb-24 md:pb-3">
       
       {/* TOP BAR: Fixed Session Unique Invoice Number & Date/Time */}
       <div className="shrink-0 bg-[#1F2937] border border-[#374151] rounded-xl px-3 py-2 flex items-center justify-between shadow-md">
@@ -642,10 +642,10 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
       </div>
 
       {/* MAIN TWO-COLUMN CONTAINER */}
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-2.5 overflow-hidden">
+      <div className="flex-1 lg:min-h-0 flex flex-col lg:flex-row gap-2.5 lg:overflow-hidden">
         
         {/* LEFT COLUMN (~70% Width): Product Search, Invoice Table, Customer & Payment */}
-        <div className="w-full lg:w-[68%] xl:w-[70%] flex flex-col h-full min-h-0 gap-2">
+        <div className="w-full lg:w-[68%] xl:w-[70%] flex flex-col lg:h-full lg:min-h-0 gap-2">
           
           {/* 1. SINGLE PRODUCT SEARCH FIELD (Autocomplete Dropdown Directly Below) */}
           <div className="relative shrink-0 bg-[#1F2937] border border-[#374151] rounded-xl p-2 shadow-md">
