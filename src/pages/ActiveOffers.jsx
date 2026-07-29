@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Tag, Sparkles, Calendar, CheckCircle2, ShoppingBag } from 'lucide-react';
+import { Tag, Sparkles, Calendar, CheckCircle2, ShoppingBag, MessageSquare } from 'lucide-react';
 import { getOffers, SEED_OFFERS } from '../services/db';
+import { shareOfferWhatsApp } from '../services/whatsappService';
+import { useAlert } from '../context/AlertContext';
 
 export default function ActiveOffers({ onNavigate }) {
+  const { toast } = useAlert();
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -115,11 +118,19 @@ export default function ActiveOffers({ onNavigate }) {
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-[#374151] text-center">
-                <div className="text-[10px] text-emerald-400 font-mono flex items-center justify-center space-x-1 font-bold">
+              <div className="pt-3 border-t border-[#374151] flex items-center justify-between">
+                <div className="text-[10px] text-emerald-400 font-mono flex items-center space-x-1 font-bold">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>APPLY DISCOUNT IN POS BILLING</span>
+                  <span>POS READY</span>
                 </div>
+                <button
+                  onClick={() => shareOfferWhatsApp(offer, '', toast)}
+                  className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl transition text-xs font-mono font-bold flex items-center space-x-1"
+                  title="Share Offer via WhatsApp"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Share Offer</span>
+                </button>
               </div>
             </div>
           ))

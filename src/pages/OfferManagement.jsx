@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Tag, Plus, Trash2, Edit3, CheckCircle2, XCircle, Sparkles, 
-  Calendar, Percent, DollarSign, Image, Zap, AlertCircle, Eye
+  Calendar, Percent, DollarSign, Image, Zap, AlertCircle, Eye, MessageSquare
 } from 'lucide-react';
 import { formatRupees, formatNumberIN } from '../utils/currency';
 import { getOffers, saveOffer, deleteOffer, SEED_OFFERS } from '../services/db';
+import { shareOfferWhatsApp } from '../services/whatsappService';
+import { useAlert } from '../context/AlertContext';
 
 export default function OfferManagement() {
+  const { toast } = useAlert();
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -225,20 +228,31 @@ export default function OfferManagement() {
               {/* Action Buttons */}
               <div className="pt-3 border-t border-[#374151] flex items-center justify-between">
                 <button
-                  onClick={() => handleOpenEdit(offer)}
-                  className="px-3 py-1.5 bg-[#1F2937] hover:bg-[#1F2937]/80 text-[#F3F4F6] border border-[#374151] rounded-xl transition text-xs font-mono font-bold flex items-center space-x-1"
+                  onClick={() => shareOfferWhatsApp(offer, '', toast)}
+                  className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl transition text-xs font-mono font-bold flex items-center space-x-1"
+                  title="Share Offer via WhatsApp"
                 >
-                  <Edit3 className="w-3.5 h-3.5 text-[#14B8A6]" />
-                  <span>Edit</span>
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>WhatsApp</span>
                 </button>
 
-                <button
-                  onClick={() => handleDelete(offer.id)}
-                  className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl transition text-xs font-mono font-bold flex items-center space-x-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete</span>
-                </button>
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    onClick={() => handleOpenEdit(offer)}
+                    className="px-3 py-1.5 bg-[#1F2937] hover:bg-[#1F2937]/80 text-[#F3F4F6] border border-[#374151] rounded-xl transition text-xs font-mono font-bold flex items-center space-x-1"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-[#14B8A6]" />
+                    <span>Edit</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(offer.id)}
+                    className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl transition text-xs font-mono font-bold flex items-center space-x-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
               </div>
             </div>
           );

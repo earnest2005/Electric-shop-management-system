@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { 
   FileText, Search, Filter, Download, Printer, Eye, Calendar, 
-  DollarSign, User, RefreshCw, CreditCard, CheckCircle2
+  DollarSign, User, RefreshCw, CreditCard, CheckCircle2, MessageSquare
 } from 'lucide-react';
 import { formatRupees, formatNumberIN } from '../utils/currency';
 import { getPurchases } from '../services/db';
 import { exportSalesCSV, exportToCSV } from '../utils/exporter';
 import AdminInvoiceModal from '../components/AdminInvoiceModal';
+import { sendInvoiceWhatsApp } from '../services/whatsappService';
+import { useAlert } from '../context/AlertContext';
+import WhatsAppPhoneBadge from '../components/WhatsAppPhoneBadge';
 
 export default function BillRecords() {
+  const { toast } = useAlert();
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -194,7 +198,9 @@ export default function BillRecords() {
 
                     <td className="p-3.5 font-sans">
                       <div className="font-bold text-[#F3F4F6]">{bill.customer?.name || bill.customerName || 'Walk-in'}</div>
-                      <div className="text-[10px] text-[#14B8A6] font-mono">📱 {bill.customer?.phone || bill.customerPhone || 'N/A'}</div>
+                      <div className="text-[10px] text-[#14B8A6] font-mono mt-0.5">
+                        <WhatsAppPhoneBadge phone={bill.customer?.phone || bill.customerPhone} showNumber={true} />
+                      </div>
                     </td>
 
                     <td className="p-3.5 text-center">
@@ -212,13 +218,23 @@ export default function BillRecords() {
                     </td>
 
                     <td className="p-3.5 text-center">
-                      <button
-                        onClick={() => setSelectedInvoice(bill)}
-                        className="px-3 py-1.5 bg-[#1F2937] hover:bg-[#374151] text-[#14B8A6] border border-[#374151] rounded-xl transition text-[11px] font-bold inline-flex items-center space-x-1 min-h-[36px]"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>View Invoice</span>
-                      </button>
+                      <div className="flex items-center justify-center space-x-1.5">
+                        <button
+                          onClick={() => sendInvoiceWhatsApp(bill, toast)}
+                          className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl transition text-[11px] font-bold inline-flex items-center space-x-1 min-h-[36px]"
+                          title="Send Invoice summary via WhatsApp"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>WhatsApp</span>
+                        </button>
+                        <button
+                          onClick={() => setSelectedInvoice(bill)}
+                          className="px-3 py-1.5 bg-[#1F2937] hover:bg-[#374151] text-[#14B8A6] border border-[#374151] rounded-xl transition text-[11px] font-bold inline-flex items-center space-x-1 min-h-[36px]"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Bill</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -246,7 +262,9 @@ export default function BillRecords() {
                 <div className="flex justify-between items-center text-xs">
                   <div>
                     <div className="font-bold text-[#F3F4F6]">{bill.customer?.name || bill.customerName || 'Walk-in'}</div>
-                    <div className="text-[11px] text-[#9CA3AF] font-mono">📱 {bill.customer?.phone || bill.customerPhone || 'N/A'}</div>
+                    <div className="text-[11px] text-[#9CA3AF] font-mono mt-0.5">
+                      <WhatsAppPhoneBadge phone={bill.customer?.phone || bill.customerPhone} showNumber={true} />
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-[10px] text-[#9CA3AF] font-mono">Staff: {bill.staffName || bill.staff || 'Staff'}</div>
@@ -260,13 +278,23 @@ export default function BillRecords() {
                   <div className="font-mono font-extrabold text-[#F3F4F6] text-base">
                     {formatRupees(bill.totalAmount)}
                   </div>
-                  <button
-                    onClick={() => setSelectedInvoice(bill)}
-                    className="px-4 py-2 bg-[#273549] hover:bg-[#374151] text-[#14B8A6] border border-[#374151] rounded-xl transition text-xs font-bold flex items-center space-x-1.5 min-h-[44px]"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span>View Invoice</span>
-                  </button>
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      onClick={() => sendInvoiceWhatsApp(bill, toast)}
+                      className="px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl transition text-xs font-bold flex items-center space-x-1 min-h-[44px]"
+                      title="Send WhatsApp Invoice"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>WhatsApp</span>
+                    </button>
+                    <button
+                      onClick={() => setSelectedInvoice(bill)}
+                      className="px-3 py-2 bg-[#273549] hover:bg-[#374151] text-[#14B8A6] border border-[#374151] rounded-xl transition text-xs font-bold flex items-center space-x-1.5 min-h-[44px]"
+                    >
+                      <Eye className="w-4 h-4" />
+                      <span>View</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))

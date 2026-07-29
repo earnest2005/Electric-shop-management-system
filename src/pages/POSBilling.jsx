@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Search, ShoppingCart, Trash2, User, UserCheck, UserPlus,
-  AlertTriangle, Zap, FileText, PauseCircle, RotateCcw, Printer, Clock, FileCheck
+  AlertTriangle, Zap, FileText, PauseCircle, RotateCcw, Printer, Clock, FileCheck, MessageSquare
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { formatRupees, rupeesToPaise, paiseToRupees, formatNumberIN } from '../utils/currency';
@@ -10,6 +10,8 @@ import { useAlert } from '../context/AlertContext';
 import { useAuth } from '../context/AuthContext';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { printReceiptHtml } from '../utils/print';
+import { sendEstimateWhatsApp } from '../services/whatsappService';
+import WhatsAppPhoneBadge from '../components/WhatsAppPhoneBadge';
 
 export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
   const { toast } = useAlert();
@@ -407,6 +409,21 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
     });
     printReceiptHtml(estimateHtml);
     toast.success("Estimate / Quotation generated", "Estimate Ready");
+  };
+
+  // Send Estimate via WhatsApp
+  const handleSendEstimateWhatsApp = () => {
+    if (cart.length === 0) {
+      toast.warning("Cannot send estimate for an empty cart!", "Empty Cart");
+      return;
+    }
+    sendEstimateWhatsApp({
+      billNumber: invoiceNumber,
+      customerName: customerName || 'Valued Customer',
+      customerPhone,
+      totalAmountPaise,
+      validity: 'Valid for 7 days'
+    }, toast);
   };
 
   // Quick Print Receipt Preview
@@ -1127,28 +1144,39 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
               <span>{isSubmitting ? 'PROCESSING...' : 'COMPLETE SALE'}</span>
             </button>
 
-            {/* Action Buttons Grid: Hold Bill, Save Estimate, Print */}
-            <div className="grid grid-cols-3 gap-1.5">
+            {/* Action Buttons Grid: Hold Bill, Save Estimate, Send Estimate (WhatsApp), Print */}
+            <div className="grid grid-cols-4 gap-1">
               <button
                 type="button"
                 onClick={handleHoldBill}
                 disabled={cart.length === 0}
-                className="py-2 px-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono font-bold text-xs flex items-center justify-center space-x-1 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                className="py-2 px-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono font-bold text-[11px] flex items-center justify-center space-x-0.5 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 title="Hold Bill (F8)"
               >
                 <PauseCircle className="w-3.5 h-3.5" />
-                <span>Hold (F8)</span>
+                <span>Hold</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleSaveEstimate}
                 disabled={cart.length === 0}
-                className="py-2 px-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 font-mono font-bold text-xs flex items-center justify-center space-x-1 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                className="py-2 px-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 font-mono font-bold text-[11px] flex items-center justify-center space-x-0.5 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-blue-400"
                 title="Save Estimate / Quotation"
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>Estimate</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSendEstimateWhatsApp}
+                disabled={cart.length === 0}
+                className="py-2 px-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold text-[11px] flex items-center justify-center space-x-0.5 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                title="Send Estimate via WhatsApp"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                <span>WhatsApp</span>
               </button>
 
               <button
@@ -1162,7 +1190,7 @@ export default function POSBilling({ onCompleteSale, onResumeDraftData }) {
                   }
                 }}
                 disabled={cart.length === 0}
-                className="py-2 px-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono font-bold text-xs flex items-center justify-center space-x-1 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                className="py-2 px-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono font-bold text-[11px] flex items-center justify-center space-x-0.5 transition disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-purple-400"
                 title="Print Receipt Preview"
               >
                 <Printer className="w-3.5 h-3.5" />

@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, CheckCircle2 } from 'lucide-react';
+import { X, Printer, CheckCircle2, MessageSquare } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { formatNumberIN } from '../utils/currency';
 import { getShopDetails, DEFAULT_SHOP_DETAILS } from '../services/db';
 import { printReceiptHtml } from '../utils/print';
+import { sendInvoiceWhatsApp } from '../services/whatsappService';
+import { useAlert } from '../context/AlertContext';
+import WhatsAppPhoneBadge from './WhatsAppPhoneBadge';
 
 export default function ReceiptModal({ invoice, onClose }) {
+  const { toast } = useAlert();
   const [shopInfo, setShopInfo] = useState(DEFAULT_SHOP_DETAILS);
   const [canClose, setCanClose] = useState(false);
 
@@ -70,6 +74,14 @@ export default function ReceiptModal({ invoice, onClose }) {
     }
   };
 
+  const handleSendWhatsApp = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    sendInvoiceWhatsApp(invoice, toast);
+  };
+
   const handleSafeClose = (e) => {
     if (e) {
       e.preventDefault();
@@ -118,6 +130,15 @@ export default function ReceiptModal({ invoice, onClose }) {
             </div>
           </div>
           <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={handleSendWhatsApp}
+              className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm"
+              title="Send Invoice summary via WhatsApp"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Send via WhatsApp</span>
+            </button>
             <button
               type="button"
               onClick={handlePrint}
@@ -304,11 +325,19 @@ export default function ReceiptModal({ invoice, onClose }) {
         </div>
 
         {/* Modal Bottom Action Footer (Hidden in Print) */}
-        <div className="p-4 border-t border-[#374151] bg-[#1F2937] flex justify-end space-x-2 print:hidden font-sans">
+        <div className="p-4 border-t border-[#374151] bg-[#1F2937] flex items-center justify-between space-x-2 print:hidden font-sans">
+          <button
+            type="button"
+            onClick={handleSendWhatsApp}
+            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-sm transition flex items-center justify-center space-x-1.5"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>SEND VIA WHATSAPP</span>
+          </button>
           <button
             type="button"
             onClick={handleSafeClose}
-            className="w-full py-2.5 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-extrabold text-xs rounded-xl shadow-sm transition"
+            className="flex-1 py-2.5 bg-[#14B8A6] hover:bg-[#0D9488] text-white font-extrabold text-xs rounded-xl shadow-sm transition"
           >
             CLOSE & START NEW SALE
           </button>

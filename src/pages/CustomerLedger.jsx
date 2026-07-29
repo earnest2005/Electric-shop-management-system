@@ -5,6 +5,8 @@ import { getCustomers, recordDuePayment, getCustomerPayments, getPurchases, save
 import { useAlert } from '../context/AlertContext';
 import { useAuth } from '../context/AuthContext';
 import { exportCustomerLedgerCSV } from '../utils/exporter';
+import { sendDueReminderWhatsApp } from '../services/whatsappService';
+import WhatsAppPhoneBadge from '../components/WhatsAppPhoneBadge';
 
 export default function CustomerLedger() {
   const { toast, confirm } = useAlert();
@@ -48,13 +50,7 @@ export default function CustomerLedger() {
   }, []);
 
   const handleSendWhatsAppReminder = (customer) => {
-    const cleanPhone = customer.phone.replace(/\D/g, '');
-    const phoneWithCode = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const dueAmountStr = formatRupees(customer.totalDue);
-    const message = encodeURIComponent(
-      `Dear ${customer.name},\n\nThis is a friendly payment reminder from Volt Electricals regarding your outstanding balance of ${dueAmountStr}.\n\nPlease arrange for payment at your earliest convenience.\n\nThank you!`
-    );
-    window.open(`https://wa.me/${phoneWithCode}?text=${message}`, '_blank');
+    sendDueReminderWhatsApp(customer, toast);
   };
 
   const handleExportLedger = () => {
@@ -356,8 +352,8 @@ export default function CustomerLedger() {
                   </div>
 
                   <div className="pt-2 border-t border-[#374151] flex items-center justify-between text-xs">
-                    <div className="font-mono text-[#14B8A6] font-bold flex items-center gap-1">
-                      <Phone className="w-3.5 h-3.5" /> +91 {cust.phone}
+                    <div className="font-mono text-[#14B8A6] font-bold">
+                      <WhatsAppPhoneBadge phone={cust.phone} showNumber={true} />
                     </div>
 
                     <div className="flex items-center space-x-1.5">
@@ -446,10 +442,7 @@ export default function CustomerLedger() {
                           </div>
                         </td>
                         <td className="px-6 py-4 font-mono text-[#14B8A6] font-bold">
-                          <div className="flex items-center gap-1.5">
-                            <Phone className="w-3.5 h-3.5 text-[#14B8A6]" />
-                            <span>+91 {cust.phone}</span>
-                          </div>
+                          <WhatsAppPhoneBadge phone={cust.phone} showNumber={true} />
                         </td>
                         <td className="px-6 py-4 text-right font-mono font-semibold text-[#9CA3AF]">
                           {formatRupees(cust.totalPurchases || 0)}

@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Search, Filter, Download, Printer, FileText, Phone, 
-  Calendar, DollarSign, UserCheck, Clock, ChevronRight, Eye, RefreshCw
+  Calendar, DollarSign, UserCheck, Clock, ChevronRight, Eye, RefreshCw, MessageSquare, Mail
 } from 'lucide-react';
 import { formatRupees, formatNumberIN } from '../utils/currency';
 import { getCustomers, getPurchases } from '../services/db';
 import { exportCustomerLedgerCSV, exportToCSV } from '../utils/exporter';
 import AdminInvoiceModal from '../components/AdminInvoiceModal';
+import { openWhatsAppChat } from '../services/whatsappService';
+import { useAlert } from '../context/AlertContext';
+import WhatsAppPhoneBadge from '../components/WhatsAppPhoneBadge';
 
 export default function CustomerRecords() {
+  const { toast } = useAlert();
   const [customers, setCustomers] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -255,7 +259,7 @@ export default function CustomerRecords() {
                       </td>
 
                       <td className="p-3.5 text-[#14B8A6] font-bold">
-                        📱 {cust.phone}
+                        <WhatsAppPhoneBadge phone={cust.phone} showNumber={true} />
                       </td>
 
                       <td className="p-3.5 text-right font-extrabold text-emerald-400">
@@ -275,13 +279,38 @@ export default function CustomerRecords() {
                       </td>
 
                       <td className="p-3.5 text-center">
-                        <button
-                          onClick={() => setSelectedCustomer(cust)}
-                          className="px-3 py-1.5 bg-[#1F2937] hover:bg-[#374151] text-[#14B8A6] border border-[#374151] rounded-xl transition text-[11px] font-bold inline-flex items-center space-x-1 min-h-[36px]"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>View Timeline</span>
-                        </button>
+                        <div className="flex items-center justify-center space-x-1.5">
+                          <a
+                            href={`tel:${cust.phone}`}
+                            className="p-1.5 bg-[#1F2937] hover:bg-[#374151] text-[#14B8A6] border border-[#374151] rounded-lg transition min-w-[32px] min-h-[32px] flex items-center justify-center"
+                            title={`Call +91 ${cust.phone}`}
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                          </a>
+                          <button
+                            onClick={() => openWhatsAppChat(cust.phone, '', toast)}
+                            className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg transition min-w-[32px] min-h-[32px] flex items-center justify-center"
+                            title={`WhatsApp Chat with ${cust.phone}`}
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                          {cust.email && (
+                            <a
+                              href={`mailto:${cust.email}`}
+                              className="p-1.5 bg-[#1F2937] hover:bg-[#374151] text-blue-400 border border-[#374151] rounded-lg transition min-w-[32px] min-h-[32px] flex items-center justify-center"
+                              title={`Email ${cust.email}`}
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                          <button
+                            onClick={() => setSelectedCustomer(cust)}
+                            className="px-2.5 py-1 bg-[#1F2937] hover:bg-[#374151] text-[#14B8A6] border border-[#374151] rounded-lg transition text-[11px] font-bold inline-flex items-center space-x-1 min-h-[32px]"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Timeline</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -314,17 +343,35 @@ export default function CustomerRecords() {
                       </div>
                       <div>
                         <h4 className="font-bold text-[#F3F4F6] text-sm">{cust.name || 'Walk-in Customer'}</h4>
-                        <div className="text-[11px] text-[#14B8A6] font-mono">📱 {cust.phone}</div>
+                        <div className="text-[11px] text-[#14B8A6] font-mono mt-0.5">
+                          <WhatsAppPhoneBadge phone={cust.phone} showNumber={true} />
+                        </div>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => setSelectedCustomer(cust)}
-                      className="p-2 bg-[#273549] text-[#14B8A6] border border-[#374151] rounded-xl transition min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0"
-                      title="View Customer Timeline"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <a
+                        href={`tel:${cust.phone}`}
+                        className="p-2 bg-[#273549] text-[#14B8A6] border border-[#374151] rounded-xl transition min-w-[40px] min-h-[40px] flex items-center justify-center"
+                        title={`Call +91 ${cust.phone}`}
+                      >
+                        <Phone className="w-4 h-4" />
+                      </a>
+                      <button
+                        onClick={() => openWhatsAppChat(cust.phone, '', toast)}
+                        className="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl transition min-w-[40px] min-h-[40px] flex items-center justify-center"
+                        title={`WhatsApp Chat with ${cust.phone}`}
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setSelectedCustomer(cust)}
+                        className="p-2 bg-[#273549] text-[#14B8A6] border border-[#374151] rounded-xl transition min-w-[40px] min-h-[40px] flex items-center justify-center shrink-0"
+                        title="View Customer Timeline"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-2 border-t border-[#374151]">

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Receipt, Search, Eye, Printer, Calendar, User, Phone, CheckCircle, AlertCircle, FileText, Trash2, Download } from 'lucide-react';
+import { Receipt, Search, Eye, Printer, Calendar, User, Phone, CheckCircle, AlertCircle, FileText, Trash2, Download, MessageSquare } from 'lucide-react';
 import { formatRupees } from '../utils/currency';
 import { getPurchases, deleteInvoice } from '../services/db';
 import { useAlert } from '../context/AlertContext';
 import { exportSalesCSV } from '../utils/exporter';
+import { sendInvoiceWhatsApp } from '../services/whatsappService';
+import WhatsAppPhoneBadge from '../components/WhatsAppPhoneBadge';
 
 export default function SalesHistory({ onViewReceipt }) {
   const { toast, confirm } = useAlert();
@@ -196,7 +198,9 @@ export default function SalesHistory({ onViewReceipt }) {
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-bold text-[#F3F4F6] text-sm">{p.customerName}</div>
-                      <div className="text-[11px] text-[#9CA3AF] font-mono">+91 {p.customerPhone}</div>
+                      <div className="text-[11px] text-[#9CA3AF] font-mono mt-0.5">
+                        <WhatsAppPhoneBadge phone={p.customerPhone} showNumber={true} />
+                      </div>
                     </td>
                     <td className="px-6 py-4 font-mono">
                       <span className="bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 rounded text-teal-300 font-semibold">
@@ -213,13 +217,21 @@ export default function SalesHistory({ onViewReceipt }) {
                       )}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center space-x-2">
+                      <div className="flex items-center justify-center space-x-1.5">
+                        <button
+                          onClick={() => sendInvoiceWhatsApp(p, toast)}
+                          className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold rounded-lg border border-emerald-500/30 transition flex items-center space-x-1 min-h-[36px]"
+                          title="Send Invoice summary via WhatsApp"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>WhatsApp</span>
+                        </button>
                         <button
                           onClick={() => onViewReceipt(p)}
                           className="px-3 py-1.5 bg-[#1F2937] hover:bg-[#374151] text-[#14B8A6] font-semibold rounded-lg border border-[#374151] transition flex items-center space-x-1 min-h-[36px]"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          <span>View Bill</span>
+                          <span>View</span>
                         </button>
                         <button
                           onClick={() => handleDeleteInvoice(p)}
@@ -256,7 +268,9 @@ export default function SalesHistory({ onViewReceipt }) {
                 <div className="flex justify-between items-start text-xs">
                   <div>
                     <h4 className="font-bold text-[#F3F4F6] text-sm">{p.customerName}</h4>
-                    <p className="text-[11px] text-[#14B8A6] font-mono">📱 {p.customerPhone}</p>
+                    <div className="text-[11px] text-[#14B8A6] font-mono mt-0.5">
+                      <WhatsAppPhoneBadge phone={p.customerPhone} showNumber={true} />
+                    </div>
                   </div>
                   <div className="text-right text-[10px] text-[#9CA3AF] font-mono">
                     {new Date(p.timestamp).toLocaleDateString('en-IN')}
@@ -273,7 +287,15 @@ export default function SalesHistory({ onViewReceipt }) {
                     )}
                   </div>
 
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      onClick={() => sendInvoiceWhatsApp(p, toast)}
+                      className="px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold rounded-xl border border-emerald-500/30 transition text-xs flex items-center space-x-1 min-h-[44px]"
+                      title="Send WhatsApp Invoice"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>WhatsApp</span>
+                    </button>
                     <button
                       onClick={() => onViewReceipt(p)}
                       className="px-3 py-2 bg-[#273549] hover:bg-[#374151] text-[#14B8A6] font-semibold rounded-xl border border-[#374151] transition text-xs flex items-center space-x-1 min-h-[44px]"

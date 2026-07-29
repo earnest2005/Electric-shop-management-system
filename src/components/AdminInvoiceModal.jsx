@@ -1,9 +1,14 @@
 import React, { useEffect } from 'react';
-import { X, Printer, Download, FileText, CheckCircle2, User, Phone, MapPin, Calendar, CreditCard, ShieldCheck } from 'lucide-react';
+import { X, Printer, Download, FileText, CheckCircle2, User, Phone, MapPin, Calendar, CreditCard, ShieldCheck, MessageSquare } from 'lucide-react';
 import { formatRupees, formatNumberIN } from '../utils/currency';
 import { printReceiptHtml } from '../utils/print';
+import { sendInvoiceWhatsApp } from '../services/whatsappService';
+import { useAlert } from '../context/AlertContext';
+import WhatsAppPhoneBadge from './WhatsAppPhoneBadge';
 
 export default function AdminInvoiceModal({ invoice, onClose, shopDetails }) {
+  const { toast } = useAlert();
+
   useEffect(() => {
     // Close on Escape key press
     const handleKeyDown = (e) => {
@@ -28,6 +33,14 @@ export default function AdminInvoiceModal({ invoice, onClose, shopDetails }) {
     } else {
       window.print();
     }
+  };
+
+  const handleSendWhatsApp = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    sendInvoiceWhatsApp(invoice, toast);
   };
 
   const handleDownloadPDF = (e) => {
@@ -103,6 +116,15 @@ export default function AdminInvoiceModal({ invoice, onClose, shopDetails }) {
           <div className="flex items-center space-x-2 shrink-0 self-end sm:self-auto font-mono">
             <button
               type="button"
+              onClick={handleSendWhatsApp}
+              className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-2 rounded-xl transition shadow-sm"
+              title="Send Invoice summary via WhatsApp"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>WhatsApp</span>
+            </button>
+            <button
+              type="button"
               onClick={handlePrint}
               className="flex items-center space-x-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm"
             >
@@ -148,9 +170,9 @@ export default function AdminInvoiceModal({ invoice, onClose, shopDetails }) {
                   <span className="text-slate-400">Customer</span>
                   <span className="font-bold text-slate-200">{custName}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-slate-400">Mobile Number</span>
-                  <span className="font-bold text-slate-300">{custPhone}</span>
+                  <WhatsAppPhoneBadge phone={custPhone} showNumber={true} />
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Payment Method</span>
