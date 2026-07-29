@@ -17,3 +17,6 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
       .catch((err) => console.warn('PWA Service Worker registration error:', err));
   });
 }
+
+// Cloudflare Pages Fresh Build Deployment Trigger: 2026-07-29T13:52:00+05:30
+
